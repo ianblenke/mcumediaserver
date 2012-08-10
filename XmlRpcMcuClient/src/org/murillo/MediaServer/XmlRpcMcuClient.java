@@ -24,6 +24,7 @@ import org.apache.xmlrpc.XmlRpcException;
 import org.apache.xmlrpc.client.XmlRpcClientConfigImpl;
 import java.util.HashMap;
 import java.util.Map;
+import org.murillo.MediaServer.Codecs.MediaType;
 
 /**
  *
@@ -65,6 +66,7 @@ public class XmlRpcMcuClient {
     public static final Integer MOSAICPIP3  = 8;
 
     public static final Integer DefaultMosaic = 0;
+    public static final Integer DefaultSidebar = 0;
 
     public static final Integer RTP = 0;
     public static final Integer RTMP = 1;
@@ -203,10 +205,10 @@ public class XmlRpcMcuClient {
         return ((Integer)returnVal[0])==1;
     }
     
-    public Integer CreateParticipant(Integer confId,Integer mosaicId,String name,Integer type) throws XmlRpcException
+    public Integer CreateParticipant(Integer confId,String name,Integer type,Integer mosaicId,Integer sidebarId) throws XmlRpcException
     {
          //Create request
-        Object[] request = new Object[]{confId,mosaicId,name,type};
+        Object[] request = new Object[]{confId,name,type,mosaicId,sidebarId};
         //Execute 
         HashMap response = (HashMap) client.execute("CreateParticipant", request);
         //Get result
@@ -254,7 +256,69 @@ public class XmlRpcMcuClient {
         //Return
         return true;
     }
-    
+
+    public boolean AddSidebarParticipant(Integer confId,Integer sidebarId,Integer partId) throws XmlRpcException
+    {
+         //Create request
+        Object[] request = new Object[]{confId,sidebarId,partId};
+        //Execute
+        HashMap response = (HashMap) client.execute("AddSidebarParticipant", request);
+        //Return
+        return true;
+    }
+
+    public boolean RemoveSidebarParticipant(Integer confId,Integer sidebarId,Integer partId) throws XmlRpcException
+    {
+         //Create request
+        Object[] request = new Object[]{confId,sidebarId,partId};
+        //Execute
+        HashMap response = (HashMap) client.execute("RemoveSidebarParticipant", request);
+        //Return
+        return true;
+    }
+
+    public boolean StartSending(Integer confId,Integer partId,MediaType media,String sendIp,Integer sendPort,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,partId,media.valueOf(),sendIp,sendPort,rtpMap};
+        //Execute
+        HashMap response = (HashMap) client.execute("StartSending", request);
+        //Return
+        return true;
+    }
+
+    public boolean StopSending(Integer confId,Integer partId,MediaType media) throws XmlRpcException
+    {
+       //Create request
+        Object[] request = new Object[]{confId,partId,media.valueOf()};
+        //Execute
+        HashMap response = (HashMap) client.execute("StopSending", request);
+        //Return
+        return true;
+    }
+
+    public Integer StartReceiving(Integer confId,Integer partId,MediaType media,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,partId,media.valueOf(),rtpMap};
+        //Execute
+        HashMap response = (HashMap) client.execute("StartReceiving", request);
+        //Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+        //Return port
+        return (Integer)returnVal[0];
+    }
+
+    public boolean StopReceiving(Integer confId,Integer partId,MediaType media) throws XmlRpcException
+    {
+       //Create request
+        Object[] request = new Object[]{confId,partId,media.valueOf()};
+        //Execute
+        HashMap response = (HashMap) client.execute("StopReceiving", request);
+        //Return
+        return true;
+    }
+
     //Video
     public boolean SetVideoCodec(Integer confId,Integer partId,Integer codec,Integer mode,Integer fps,Integer bitrate,Integer quality, Integer fillLevel, Integer intraPeriod) throws XmlRpcException
     {
@@ -265,49 +329,7 @@ public class XmlRpcMcuClient {
         //Return 
         return true;
     }
-    
-    public boolean StartSendingVideo(Integer confId,Integer partId,String sendVideoIp,Integer sendVideoPort,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId,sendVideoIp,sendVideoPort,rtpMap};
-        //Execute 
-        HashMap response = (HashMap) client.execute("StartSendingVideo", request);
-        //Return 
-        return true;
-    }
-    
-    public boolean StopSendingVideo(Integer confId,Integer partId) throws XmlRpcException
-    {
-       //Create request
-        Object[] request = new Object[]{confId,partId};
-        //Execute 
-        HashMap response = (HashMap) client.execute("StopSendingVideo", request);
-        //Return 
-        return true;
-    }
-    
-    public Integer StartReceivingVideo(Integer confId,Integer partId,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId,rtpMap};
-        //Execute 
-        HashMap response = (HashMap) client.execute("StartReceivingVideo", request);
-        //Get result
-        Object[] returnVal = (Object[]) response.get("returnVal");
-        //Return port
-        return (Integer)returnVal[0];
-    }
-    
-    public boolean StopReceivingVideo(Integer confId,Integer partId) throws XmlRpcException
-    {
-       //Create request
-        Object[] request = new Object[]{confId,partId};
-        //Execute 
-        HashMap response = (HashMap) client.execute("StopReceivingVideo", request);
-        //Return 
-        return true;
-    }
-    
+
     //Audio
     public boolean SetAudioCodec(Integer confId,Integer partId,Integer codec) throws XmlRpcException
     {
@@ -318,49 +340,7 @@ public class XmlRpcMcuClient {
         //Return 
         return true;
     }
-    
-    public boolean StartSendingAudio(Integer confId,Integer partId,String sendAudioIp,Integer sendAudioPort,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId,sendAudioIp,sendAudioPort,rtpMap};
-        //Execute 
-        HashMap response = (HashMap) client.execute("StartSendingAudio", request);
-        //Return 
-        return true;
-    }
-    
-    public boolean StopSendingAudio(Integer confId,Integer partId) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId};
-        //Execute 
-        HashMap response = (HashMap) client.execute("StopSendingAudio", request);
-        //Return 
-        return true;
-    }
-    
-    public Integer StartReceivingAudio(Integer confId,Integer partId,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId,rtpMap};
-        //Execute 
-        HashMap response = (HashMap) client.execute("StartReceivingAudio", request);
-        //Get result
-        Object[] returnVal = (Object[]) response.get("returnVal");
-        //Return port
-        return (Integer)returnVal[0];
-    }
-    
-    public boolean StopReceivingAudio(Integer confId,Integer partId) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId};
-        //Execute 
-        HashMap response = (HashMap) client.execute("StopReceivingAudio", request);
-        //Return 
-        return true;
-    }
-    
+            
     //Text
     public boolean SetTextCodec(Integer confId,Integer partId,Integer codec) throws XmlRpcException
     {
@@ -368,48 +348,6 @@ public class XmlRpcMcuClient {
         Object[] request = new Object[]{confId,partId,codec};
         //Execute
         HashMap response = (HashMap) client.execute("SetTextCodec", request);
-        //Return
-        return true;
-    }
-
-    public boolean StartSendingText(Integer confId,Integer partId,String sendTextIp,Integer sendTextPort,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId,sendTextIp,sendTextPort,rtpMap};
-        //Execute
-        HashMap response = (HashMap) client.execute("StartSendingText", request);
-        //Return
-        return true;
-    }
-
-    public boolean StopSendingText(Integer confId,Integer partId) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId};
-        //Execute
-        HashMap response = (HashMap) client.execute("StopSendingText", request);
-        //Return
-        return true;
-    }
-
-    public Integer StartReceivingText(Integer confId,Integer partId,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId,rtpMap};
-        //Execute
-        HashMap response = (HashMap) client.execute("StartReceivingText", request);
-        //Get result
-        Object[] returnVal = (Object[]) response.get("returnVal");
-        //Return port
-        return (Integer)returnVal[0];
-    }
-
-    public boolean StopReceivingText(Integer confId,Integer partId) throws XmlRpcException
-    {
-        //Create request
-        Object[] request = new Object[]{confId,partId};
-        //Execute
-        HashMap response = (HashMap) client.execute("StopReceivingText", request);
         //Return
         return true;
     }
@@ -542,6 +480,13 @@ public class XmlRpcMcuClient {
         Object[] request = new Object[]{confId,partId,mosaicId};
         //Execute
         HashMap response = (HashMap) client.execute("SetParticipantMosaic", request);
+    }
+
+    public void SetParticipantSidebar(Integer confId,Integer partId, Integer sidebarId) throws XmlRpcException {
+        //Create request
+        Object[] request = new Object[]{confId,partId,sidebarId};
+        //Execute
+        HashMap response = (HashMap) client.execute("SetParticipantSidebar", request);
     }
 
     public boolean SetMute(Integer confId,int partId,Codecs.MediaType media,boolean isMuted) throws XmlRpcException

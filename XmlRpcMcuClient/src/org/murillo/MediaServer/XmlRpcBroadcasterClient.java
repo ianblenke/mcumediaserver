@@ -23,6 +23,8 @@ import java.net.URL;
 import org.apache.xmlrpc.XmlRpcException;
 import org.apache.xmlrpc.client.XmlRpcClientConfigImpl;
 import java.util.HashMap;
+import java.util.Map;
+import org.murillo.MediaServer.XmlRpcMcuClient.ConferenceInfo;
 
 /**
  *
@@ -32,6 +34,12 @@ public class XmlRpcBroadcasterClient {
 
     private XmlRpcTimedClient client;
     private XmlRpcClientConfigImpl config;
+
+    public class BroadcastStreamInfo {
+        public String name;
+        public String url;
+        public String publishedIp;
+    }
 
     /** Creates a new instance of XmlRpcMcuClient */
     public XmlRpcBroadcasterClient(String  url) throws MalformedURLException
@@ -86,5 +94,33 @@ public class XmlRpcBroadcasterClient {
         HashMap response = (HashMap) client.execute("DeleteBroadcast", request);
     }
 
+    public Map<String,BroadcastStreamInfo> getBroadcastPublishedStreams(Integer broadcastId) throws XmlRpcException {
+        //Create request
+        Object[] request = new Object[]{broadcastId};
+        //Execute
+        HashMap response = (HashMap) client.execute("GetBroadcastPublishedStreams", request);
+        //Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+        //Create map
+        HashMap<String,BroadcastStreamInfo> streams = new HashMap<String, BroadcastStreamInfo>(returnVal.length);
+        //For each value in array
+        for (int i=0;i<returnVal.length;i++)
+        {
+            //Get array
+             Object[] arr = (Object[]) returnVal[i];
+             //Get id
+             String name = (String)arr[0];
+             //Create info
+             BroadcastStreamInfo info = new BroadcastStreamInfo();
+             //Fill values
+             info.name          = (String)arr[0];
+             info.url           = (String)arr[1];
+             info.publishedIp   = (String)arr[2];
+             //Add it
+             streams.put(name, info);
+        }
+        //Return conference list
+        return streams;
+    }
 
 }
