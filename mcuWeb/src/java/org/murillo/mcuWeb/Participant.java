@@ -44,7 +44,7 @@ public abstract class Participant  implements Serializable {
     protected Boolean textSupported;
     protected State state;
     protected Integer mosaicId;
-
+    protected Integer sidebarId;
     protected HashSet<Listener> listeners = null;
     protected Conference conf = null;
     private boolean autoAccept;
@@ -79,13 +79,14 @@ public abstract class Participant  implements Serializable {
         //Default constructor for Xml Serialization
     }
 
-    Participant(Integer id,String name,Integer mosaicId,Conference conf,Type type) {
+    Participant(Integer id,String name,Integer mosaicId,Integer sidebarId,Conference conf,Type type) {
         //Save values
         this.id = id;
         this.conf = conf;
         this.type = type;
         this.name = name;
         this.mosaicId = mosaicId;
+        this.sidebarId = sidebarId;
         //Get initial profile
         this.profile = conf.getProfile();
         //Not muted

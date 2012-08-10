@@ -872,7 +872,7 @@ public class ConferenceMngr implements Conference.Listener {
         Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINEST, "creating participant for confId={0}", conf.getId());
 
         //Create participant
-        RTPParticipant part = (RTPParticipant)conf.createParticipant(Participant.Type.SIP,XmlRpcMcuClient.DefaultMosaic,name);
+        RTPParticipant part = (RTPParticipant)conf.createParticipant(Participant.Type.SIP,name,XmlRpcMcuClient.DefaultMosaic,XmlRpcMcuClient.DefaultSidebar);
 
         //Log
         Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINEST, "calling part.onInvite for confId={0}", conf.getId());

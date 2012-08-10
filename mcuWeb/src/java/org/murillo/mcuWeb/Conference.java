@@ -323,7 +323,7 @@ public class Conference implements Participant.Listener {
         return isAdHoc;
     }
 
-    public Participant createParticipant(Participant.Type type, int mosaicId,String name) {
+    public Participant createParticipant(Participant.Type type, String name,int mosaicId, int sidebarId) {
         Participant part = null;
         Integer partId = -1;
 
@@ -333,12 +333,12 @@ public class Conference implements Participant.Listener {
                 //Empte name
                 name = "";
             //Create participant in mixer conference
-            partId = client.CreateParticipant(id,mosaicId,name.replace('.','_'),type.valueOf());
+            partId = client.CreateParticipant(id,name.replace('.','_'),type.valueOf(),mosaicId,sidebarId);
             //Check type
             if (type==Participant.Type.SIP)
             {
             //Create the participant
-                part = new RTPParticipant(partId,name,mosaicId,this);
+                part = new RTPParticipant(partId,name,mosaicId,sidebarId,this);
             //For each supported coed
             for (Entry<String,List<Integer>> media : supportedCodecs.entrySet())
                 //for each codec
@@ -500,10 +500,10 @@ public class Conference implements Participant.Listener {
             //Set dummy domain
             domain = "mcuWeb";
         //Call
-        return callParticipant(dest,"sip:"+did+"@"+domain,XmlRpcMcuClient.DefaultMosaic);
+        return callParticipant(dest,"sip:"+did+"@"+domain,XmlRpcMcuClient.DefaultMosaic,XmlRpcMcuClient.DefaultSidebar);
     }
 
-    Participant callParticipant(String dest,String orig,int mosaicId) {
+    Participant callParticipant(String dest,String orig,int mosaicId,int sidebarId) {
         try {
             //Create addresses
             Address to = sf.createAddress(dest);
@@ -515,7 +515,7 @@ public class Conference implements Participant.Listener {
                 //Set to user
                 partName = ((SipURI)to.getURI()).getUser();
             //Create participant
-            RTPParticipant part = (RTPParticipant) createParticipant(Participant.Type.SIP,mosaicId,partName);
+            RTPParticipant part = (RTPParticipant) createParticipant(Participant.Type.SIP,partName,mosaicId,sidebarId);
             //Make call
             part.doInvite(sf,from,to);
             //Return participant

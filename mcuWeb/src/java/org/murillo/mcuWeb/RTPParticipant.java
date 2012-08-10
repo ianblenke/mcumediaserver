@@ -43,6 +43,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 import org.apache.xmlrpc.XmlRpcException;
 import org.murillo.MediaServer.Codecs;
+import org.murillo.MediaServer.Codecs.MediaType;
 import org.murillo.MediaServer.XmlRpcMcuClient;
 import org.murillo.MediaServer.XmlRpcMcuClient.MediaStatistics;
 import org.murillo.mcuWeb.Participant.State;
@@ -88,9 +89,9 @@ public class RTPParticipant extends Participant {
     private final String h264profileLevelIdDefault = "428014";
     private int videoBitrate;
 
-    RTPParticipant(Integer id,String name,Integer mosaicId,Conference conf) throws XmlRpcException {
+    RTPParticipant(Integer id,String name,Integer mosaicId,Integer sidebarId,Conference conf) throws XmlRpcException {
         //Call parent
-        super(id,name,mosaicId,conf,Type.SIP);
+        super(id,name,mosaicId,sidebarId,conf,Type.SIP);
         //Not sending
         isSendingAudio = false;
         isSendingVideo = false;
@@ -122,7 +123,7 @@ public class RTPParticipant extends Participant {
         XmlRpcMcuClient client = conf.getMCUClient();
         try {
             //Create participant in mixer conference and store new id
-            id = client.CreateParticipant(id, mosaicId, name.replace('.', '_'), type.valueOf());
+            id = client.CreateParticipant(id, name.replace('.', '_'), type.valueOf(),mosaicId,sidebarId);
             //Check state
             if (state!=State.CREATED)
             {
@@ -311,11 +312,11 @@ public class RTPParticipant extends Participant {
             if (isSendingVideo)
             {
                 //Stop sending video
-                client.StopSendingVideo(confId, id);
+                client.StopSending(confId, id, MediaType.VIDEO);
                 //Setup video with new profile
                 client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize(), profile.getVideoFPS(), profile.getVideoBitrate(), 0, 0, profile.getIntraPeriod());
                 //Send video & audio
-                client.StartSendingVideo(confId, id, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
+                client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
             }
         } catch (XmlRpcException ex) {
             Logger.getLogger("global").log(Level.SEVERE, null, ex);
@@ -1375,7 +1376,7 @@ public class RTPParticipant extends Participant {
             //Set codec
             client.SetAudioCodec(confId, id, getAudioCodec());
             //Send
-            client.StartSendingAudio(confId, id, getSendAudioIp(), getSendAudioPort(), getRtpOutMediaMap("audio"));
+            client.StartSending(confId, id, MediaType.AUDIO, getSendAudioIp(), getSendAudioPort(), getRtpOutMediaMap("audio"));
             //Sending Audio
             isSendingAudio = true;
         }
@@ -1392,7 +1393,7 @@ public class RTPParticipant extends Participant {
             //Set codec
             client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize() , profile.getVideoFPS(), bitrate, 0, 0, profile.getIntraPeriod());
             //Send
-            client.StartSendingVideo(confId, id, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
+            client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
             //Sending Video
             isSendingVideo = true;
         }
@@ -1403,7 +1404,7 @@ public class RTPParticipant extends Participant {
             //Set codec
             client.SetTextCodec(confId, id, getTextCodec());
             //Send
-            client.StartSendingText(confId, id, getSendTextIp(), getSendTextPort(), getRtpOutMediaMap("text"));
+            client.StartSending(confId, id, MediaType.TEXT, getSendTextIp(), getSendTextPort(), getRtpOutMediaMap("text"));
             //Sending Text
             isSendingText = true;
         }
@@ -1421,7 +1422,7 @@ public class RTPParticipant extends Participant {
             //Create rtp map for audio
             createRTPMap("audio");
             //Get receiving ports
-            recAudioPort = client.StartReceivingAudio(confId, id, getRtpInMediaMap("audio"));
+            recAudioPort = client.StartReceiving(confId, id, MediaType.AUDIO, getRtpInMediaMap("audio"));
         }
 
         //If supported
@@ -1430,7 +1431,7 @@ public class RTPParticipant extends Participant {
             //Create rtp map for video
             createRTPMap("video");
             //Get receiving ports
-            recVideoPort = client.StartReceivingVideo(confId, id, getRtpInMediaMap("video"));
+            recVideoPort = client.StartReceiving(confId, id, MediaType.VIDEO, getRtpInMediaMap("video"));
         }
 
         //If supported
@@ -1439,7 +1440,7 @@ public class RTPParticipant extends Participant {
             //Create rtp map for text
             createRTPMap("text");
             //Get receiving ports
-            recTextPort = client.StartReceivingText(confId, id, getRtpInMediaMap("text"));
+            recTextPort = client.StartReceiving(confId, id, MediaType.TEXT, getRtpInMediaMap("text"));
         }
 
         //And ip
