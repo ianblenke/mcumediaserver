@@ -83,7 +83,7 @@ public class Conference implements Participant.Listener {
         //Generate a uuid
         UID = UUID.randomUUID().toString();
         //Create conference
-        this.id = client.CreateConference(UID,-1);
+        this.id = client.CreateConference(UID,true,-1);
         //Get timestamp
         this.timestamp = new Date();
         //Save values
@@ -130,7 +130,7 @@ public class Conference implements Participant.Listener {
         client.StartBroadcaster(id);
         //By default add to default mosaic
         addToDefaultMosaic = true;
-        //By default do autoaccept
+        //By default do autoAccept
         autoAccept = true;
         //Not isDestroying
         isDestroying = false;
@@ -346,7 +346,7 @@ public class Conference implements Participant.Listener {
                     //Add media codec
                     ((RTPParticipant)part).addSupportedCodec(media.getKey(), codec);
             }
-            //Set autoaccept
+            //Set autoAccept
             part.setAutoAccept(autoAccept);
             //Append to list
             participants.put(partId, part);
@@ -411,8 +411,12 @@ public class Conference implements Participant.Listener {
         Integer partId = part.getId();
         //If auto add participant to default mosaic
         if (addToDefaultMosaic)
+        {
             //Add it to the default mosiac
             client.AddMosaicParticipant(id, XmlRpcMcuClient.DefaultMosaic, partId);
+            //Add it to the default sidebar
+            client.AddSidebarParticipant(id, XmlRpcMcuClient.DefaultSidebar, partId);
+        }
     }
 
     boolean acceptParticipant(Integer partId, Integer mosaicId) throws XmlRpcException, ParticipantNotFoundException {
