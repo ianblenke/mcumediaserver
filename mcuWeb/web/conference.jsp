@@ -70,14 +70,8 @@
                 <td><select name="pos" onchange="setMosaicSlot(<%=i%>,this.value);">
                         <option value="0"  <%=slots[i].equals(0)?"selected":""%>>Free
                         <option value="-1" <%=slots[i].equals(-1)?"selected":""%>>Lock
-		<%
-		    //Check VAD
-		    if (conf.isVAD())
-		    {
-		%>
 			<option value="-2" <%=slots[i].equals(-1)?"selected":""%>>VAD
 		<%
-		    }
                     //Get iterator
                     itPart = conf.getParticipants().values().iterator();
                     //Loop 
