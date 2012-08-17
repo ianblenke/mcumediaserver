@@ -140,16 +140,10 @@ public class XmlRpcMcuClient {
         return conferences;
     }
 
-    public Integer CreateConference(String tag) throws XmlRpcException
-    {
-        //Create conference without event queue
-        return CreateConference(tag,0);
-    }
-
-    public Integer CreateConference(String tag,Integer queueId) throws XmlRpcException
+    public Integer CreateConference(String tag,Boolean vad,Integer queueId) throws XmlRpcException
     {
         //Create request
-        Object[] request = new Object[]{tag,queueId};
+        Object[] request = new Object[]{tag,vad?1:0,queueId};
         //Execute 
         HashMap response = (HashMap) client.execute("CreateConference", request);
         //Get result
