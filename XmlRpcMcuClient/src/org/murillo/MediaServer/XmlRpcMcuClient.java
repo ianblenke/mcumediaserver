@@ -163,6 +163,7 @@ public class XmlRpcMcuClient {
         //Return conference id
         return (Integer)returnVal[0];
     }
+    
     public Boolean SetMosaicOverlayImage(Integer confId,Integer mosaicId,String filename) throws XmlRpcException
     {
         //Create request
@@ -198,7 +199,31 @@ public class XmlRpcMcuClient {
         //Return port
         return ((Integer)returnVal[0])==1;
     }
-    
+
+    public Integer CreateSidebar(Integer confId) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId};
+        //Execute
+        HashMap response = (HashMap) client.execute("CreateSidebar", request);
+        //Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+        //Return conference id
+        return (Integer)returnVal[0];
+    }
+
+    public Boolean DeleteSidebar(Integer confId,Integer sidebarId) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,sidebarId};
+        //Execute
+        HashMap response = (HashMap) client.execute("DeleteSidebar", request);
+        //Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+        //Return port
+        return ((Integer)returnVal[0])==1;
+    }
+
     public Integer CreateParticipant(Integer confId,String name,Integer type,Integer mosaicId,Integer sidebarId) throws XmlRpcException
     {
          //Create request
