@@ -24,7 +24,7 @@
                 <td><select name="mixerId">
                     <%
                         //Get mixers
-                        Iterator<org.murillo.mcuWeb.MediaMixer> it = confMngr.getMcus().values().iterator();
+                        Iterator<org.murillo.mcuWeb.MediaMixer> it = confMngr.getMediaMixers().values().iterator();
                         //Loop 
                         while(it.hasNext()) {
                             // Get mixer
