@@ -69,7 +69,7 @@ public class Codecs {
     public static final Integer MPEG4        = 104;
     public static final Integer H264         = 99;
     public static final Integer SORENSON     = 100;
-    
+    public static final Integer VP8          = 107;
 
     public static final Integer T140RED      = 105;
     public static final Integer T140         = 106;
@@ -92,6 +92,7 @@ public class Codecs {
          if (name.equalsIgnoreCase("MP4V"))        return new CodecInfo(MediaType.VIDEO,MPEG4);
          if (name.equalsIgnoreCase("H264"))        return new CodecInfo(MediaType.VIDEO,H264);
          if (name.equalsIgnoreCase("SORENSON"))    return new CodecInfo(MediaType.VIDEO,SORENSON);
+         if (name.equalsIgnoreCase("VP8"))         return new CodecInfo(MediaType.VIDEO,VP8);
          if (name.equalsIgnoreCase("RED"))         return new CodecInfo(MediaType.TEXT,T140RED);
          if (name.equalsIgnoreCase("T140"))        return new CodecInfo(MediaType.TEXT,T140);
          return null;
@@ -120,6 +121,7 @@ public class Codecs {
             if (name.equalsIgnoreCase("MP4V"))        return MPEG4;
             if (name.equalsIgnoreCase("H264"))        return H264;
             if (name.equalsIgnoreCase("SORENSON"))    return SORENSON;
+            if (name.equalsIgnoreCase("VP8"))         return VP8;
         }
         else if (media.equals("text"))
         {
@@ -151,6 +153,7 @@ public class Codecs {
             if (codec==MPEG4)      return "MP4V";
             if (codec==H264)       return "H264";
             if (codec==SORENSON)   return "SORENSON";
+            if (codec==VP8)        return "VP8";
          }
         else if (media.equals("text"))
         {
@@ -158,6 +161,28 @@ public class Codecs {
             if (codec==T140)       return "T140";
          }
         return "";
+    }
+
+    public static Integer getRateForCodec(String media,Integer codec)
+    {
+        if (media.equals("audio"))
+        {
+            if (codec==PCMU)            return 8000;
+            if (codec==PCMA)            return 8000;
+            if (codec==GSM)             return 8000;
+            if (codec==SPEEX16)         return 16000;
+            if (codec==AMR)             return 8000;
+            if (codec==AMR_WB)          return 16000;
+            if (codec==G726)            return 8000;
+            if (codec==G722)            return 8000;
+            if (codec==NELLY11)         return 11000;
+            if (codec==TELEFONE_EVENT)  return 8000;
+        }
+        else if (media.equals("video"))
+            return 90000;
+        else if (media.equals("text"))
+            return 1000;
+        return 0;
     }
 
      public static Vector<Integer> getCodecsFromList(String media,String list) {
