@@ -36,7 +36,7 @@ public class XmlRpcTimedClient extends XmlRpcClient {
             return callback.waitForResponse();
         } catch (Throwable ex) {
             //Launc exception
-            throw new XmlRpcException("Request timeout", ex);
+            throw new XmlRpcException("Async execution error " +ex.getMessage(), ex);
         }
     }
 }
