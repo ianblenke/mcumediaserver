@@ -33,6 +33,7 @@ import org.murillo.MediaServer.XmlRpcMcuClient;
  */
 public abstract class Participant  implements Serializable {
     protected Integer id;
+    protected String sessionId;
     protected Type type;
     protected String name;
     protected Profile profile;
@@ -104,7 +105,15 @@ public abstract class Participant  implements Serializable {
         //Initial state
         state = State.CREATED;
     }
-//
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
      public Conference getConference() {
         return conf;
     }
@@ -234,6 +243,23 @@ public abstract class Participant  implements Serializable {
     public Boolean getVideoMuted() {
         return videoMuted;
         }
+
+    public Integer getMosaicId() {
+        return mosaicId;
+    }
+
+    public Integer getSidebarId() {
+        return sidebarId;
+    }
+
+    public void setMosaicId(Integer mosaicId) {
+        this.mosaicId = mosaicId;
+    }
+
+    public void setSidebarId(Integer sidebarId) {
+        this.sidebarId = sidebarId;
+    }
+
 
     /*** Must be overrriden by children */
     public boolean setVideoProfile(Profile profile)     { return false;}

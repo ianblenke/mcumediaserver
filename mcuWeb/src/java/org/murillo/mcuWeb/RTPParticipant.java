@@ -21,11 +21,13 @@ package org.murillo.mcuWeb;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -41,12 +43,20 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
+import javax.xml.bind.DatatypeConverter;
 import org.apache.xmlrpc.XmlRpcException;
 import org.murillo.MediaServer.Codecs;
 import org.murillo.MediaServer.Codecs.MediaType;
 import org.murillo.MediaServer.XmlRpcMcuClient;
 import org.murillo.MediaServer.XmlRpcMcuClient.MediaStatistics;
-import org.murillo.mcuWeb.Participant.State;
+import org.murillo.abnf.ParserException;
+import org.murillo.sdp.Attribute;
+import org.murillo.sdp.Bandwidth;
+import org.murillo.sdp.Connection;
+import org.murillo.sdp.CryptoAttribute;
+import org.murillo.sdp.MediaDescription;
+import org.murillo.sdp.RTPMapAttribute;
+import org.murillo.sdp.SessionDescription;
 
 /**
  *
@@ -58,7 +68,6 @@ public class RTPParticipant extends Participant {
     private SipSession session = null;
     private SipApplicationSession appSession = null;
     private SipServletRequest inviteRequest = null;
-    private Integer mosaicId;
     private String recIp;
     private Integer recAudioPort;
     private Integer recVideoPort;
@@ -82,12 +91,89 @@ public class RTPParticipant extends Participant {
     private boolean isSendingAudio;
     private boolean isSendingVideo;
     private boolean isSendingText;
-    private String rejectedMedias;
+    private ArrayList<MediaDescription> rejectedMedias;
     private String videoContentType;
     private String h264profileLevelId;
     private int h264packetization;
     private final String h264profileLevelIdDefault = "428014";
     private int videoBitrate;
+    private SessionDescription remoteSDP;
+    private Boolean isSecure;
+    private Boolean rtcpFeedBack;
+    private HashMap<String,CryptoInfo> localCryptoInfo;
+    private HashMap<String,CryptoInfo> remoteCryptoInfo;
+    private boolean useICE;
+    private HashMap<String,ICEInfo> localICEInfo;
+    private HashMap<String,ICEInfo> remoteICEInfo;
+
+    private static class CryptoInfo
+    {
+        String suite;
+        String key;
+
+        public static CryptoInfo Generate()
+        {
+            //Create crypto info for media
+            CryptoInfo info = new CryptoInfo();
+            //Set suite
+            info.suite = "AES_CM_128_HMAC_SHA1_80";
+            //Get random
+            SecureRandom random = new SecureRandom();
+            //Create key bytes
+            byte[] key = new byte[30];
+            //Generate it
+            random.nextBytes(key);
+            //Encode to base 64
+            info.key = DatatypeConverter.printBase64Binary(key);
+            //return it
+            return info;
+        }
+        
+        private CryptoInfo() {
+
+        }
+
+        public CryptoInfo(String suite, String key) {
+            this.suite = suite;
+            this.key = key;
+        }
+
+    }
+
+    private static class ICEInfo
+    {
+        String ufrag;
+        String pwd;
+
+        public static ICEInfo Generate()
+        {
+            //Create ICE info for media
+            ICEInfo info = new ICEInfo();
+             //Get random
+            SecureRandom random = new SecureRandom();
+            //Create key bytes
+            byte[] frag = new byte[8];
+            byte[] pwd = new byte[22];
+            //Generate them
+            random.nextBytes(frag);
+            random.nextBytes(pwd);
+            //Create ramdom pwd
+            info.ufrag = DatatypeConverter.printHexBinary(frag);
+            info.pwd   =  DatatypeConverter.printHexBinary(pwd);
+            //return it
+            return info;
+        }
+
+        private ICEInfo() {
+            
+        }
+        
+        public ICEInfo(String ufrag, String pwd) {
+            this.ufrag = ufrag;
+            this.pwd = pwd;
+        }
+
+    }
 
     RTPParticipant(Integer id,String name,Integer mosaicId,Integer sidebarId,Conference conf) throws XmlRpcException {
         //Call parent
@@ -100,6 +186,10 @@ public class RTPParticipant extends Participant {
         sendAudioPort = 0;
         sendVideoPort = 0;
         sendTextPort = 0;
+        //No receiving ports
+        recAudioPort = 0;
+        recVideoPort = 0;
+        recTextPort = 0;
         //Supported media
         audioSupported = true;
         videoSupported = true;
@@ -110,11 +200,23 @@ public class RTPParticipant extends Participant {
         rtpInMediaMap = new HashMap<String,HashMap<Integer,Integer>>();
         rtpOutMediaMap = new HashMap<String,HashMap<Integer,Integer>>();
         //No rejected medias and no video content type
-        rejectedMedias = "";
+        rejectedMedias = new ArrayList<MediaDescription>();
         videoContentType = "";
         //Set default level and packetization
         h264profileLevelId = "";
         h264packetization = 0;
+        //Not secure by default
+        isSecure = false;
+        //Not using ice by default
+        useICE = false;
+        //Create crypto info maps
+        localCryptoInfo = new HashMap<String, CryptoInfo>();
+        remoteCryptoInfo = new HashMap<String, CryptoInfo>();
+         //Create ICE info maps
+        localICEInfo = new HashMap<String, ICEInfo>();
+        remoteICEInfo = new HashMap<String, ICEInfo>();
+        //Has RTCP feedback
+        rtcpFeedBack = false;
 }
 
     @Override
@@ -313,8 +415,14 @@ public class RTPParticipant extends Participant {
             {
                 //Stop sending video
                 client.StopSending(confId, id, MediaType.VIDEO);
+                //Get profile bitrate
+                int bitrate = profile.getVideoBitrate();
+                //Reduce to the maximum in SDP
+                if (videoBitrate>0 && videoBitrate<bitrate)
+                        //Reduce it
+                        bitrate = videoBitrate;
                 //Setup video with new profile
-                client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize(), profile.getVideoFPS(), profile.getVideoBitrate(), 0, 0, profile.getIntraPeriod());
+                client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize(), profile.getVideoFPS(), bitrate, 0, 0, profile.getIntraPeriod());
                 //Send video & audio
                 client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
             }
@@ -337,28 +445,36 @@ public class RTPParticipant extends Participant {
 
     public String createSDP() {
 
-        //Create the sdp string
-        String sdp = "v=0\r\n";
-        sdp += "o=- 0 0 IN IP4 " + getRecIp() +"\r\n";
-        sdp += "s=MediaMixerSession\r\n";
-        sdp += "c=IN IP4 "+ getRecIp() +"\r\n";
-        sdp += "t=0 0\r\n";
+        SessionDescription sdp = new SessionDescription();
 
+        //Set origin
+        sdp.setOrigin("-", getId().toString(), Long.toString(new Date().getTime()), "IN", "IP4", getRecIp());
+        //Set name
+        sdp.setSessionName("MediaMixerSession");
+        //Set connection info
+        sdp.setConnection("IN", "IP4", getRecIp());
+        //Set time
+        sdp.addTime(0,0);
         //Check if supported
         if (audioSupported)
             //Add audio related lines to the sdp
-            sdp += addMediaToSdp("audio",recAudioPort,8000);
+            sdp.addMedia(createMediaDescription("audio",recAudioPort));
         //Check if supported
         if (videoSupported)
             //Add video related lines to the sdp
-            sdp += addMediaToSdp("video",recVideoPort,90000);
+            sdp.addMedia(createMediaDescription("video",recVideoPort));
         //Check if supported
         if (textSupported)
             //Add text related lines to the sdp
-            sdp += addMediaToSdp("text",recTextPort,1000);
+            sdp.addMedia(createMediaDescription("text",recTextPort));
+
+        //Add rejecteds medias
+        for (MediaDescription md : rejectedMedias)
+            //Add it
+            sdp.addMedia(md);
 
         //Return
-        return sdp;
+        return sdp.toString();
     }
 
     public void createRTPMap(String media)
@@ -401,8 +517,24 @@ public class RTPParticipant extends Participant {
         return -1;
     }
 
-    private String addMediaToSdp(String mediaName, Integer port, int rate)
+    private MediaDescription createMediaDescription(String mediaName, Integer port)
     {
+        //Create AVP profile
+        String rtpProfile = "AVP";
+        //If is secure
+        if (isSecure)
+            //Prepend S
+            rtpProfile = "S"+rtpProfile;
+        //If has feedback
+        if (rtcpFeedBack)
+            //Append F
+            rtpProfile += "F";
+        //Create new meida description with default values
+        MediaDescription md = new MediaDescription(mediaName,port,"RTP/"+rtpProfile);
+
+        //Enable rtcp muxing
+        md.addAttribute("rtcp-mux");
+
         //Check if rtp map exist
         HashMap<Integer, Integer> rtpInMap = rtpInMediaMap.get(mediaName);
 
@@ -411,15 +543,39 @@ public class RTPParticipant extends Participant {
         {
             //Log
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.FINE, "addMediaToSdp rtpInMap is null. Disabling media {0} ", new Object[]{mediaName});
+            //Disable media
+            md.setPort(0);
             //Return empty media
-            return "m=" +mediaName + " 0 RTP/AVP\r\n";
+            return md;
         }
 
-        //Create media string
-        String mediaLine = "m=" +mediaName + " " + port +" RTP/AVP";
+        //If we are using ice
+        if (useICE)
+        {
+            //Add host candidate for RTP
+            md.addCandidate("1", 1, "UDP", 33554432-1, getRecIp(), port, "host");
+            //Add host candidate for RTCP
+            md.addCandidate("1", 2, "UDP", 33554432-2, getRecIp(), port+1, "host");
+            //Get ICE info
+            ICEInfo info = localICEInfo.get(mediaName);
+            //If ge have it
+            if (info!=null)
+            {
+                //Add ice lite attribute
+                md.addAttribute("ice-lite");
+                //Set credentials
+                md.addAttribute("ice-ufrag",info.ufrag);
+                md.addAttribute("ice-pwd",info.pwd);
+            }
+        }
 
-       //The string for the formats
-        String formatLine = "";
+        //Get Crypto info for media
+        CryptoInfo info = remoteCryptoInfo.get(mediaName);
+
+        //f we have crytpo info
+        if (info!=null)
+            //Append attribute
+            md.addAttribute( new CryptoAttribute(1, info.suite, "inline", info.key));
 
         //Add rtmpmap for each codec in supported order
         for (Integer codec : supportedCodecs.get(mediaName))
@@ -430,12 +586,12 @@ public class RTPParticipant extends Participant {
                 //Check codec
                 if (mapping.getValue()==codec)
                 {
-                    //Get type mapping
-                    Integer type = mapping.getKey();
-                    //Append type
-                    mediaLine += " " +type;
-                    //Append to sdp
-                    formatLine += "a=rtpmap:" + type + " "+ Codecs.getNameForCodec(mediaName, codec) + "/"+rate+"\r\n";
+                    //Get fmt mapping
+                    Integer fmt = mapping.getKey();
+                    //Append fmt
+                    md.addFormat(fmt);
+                    //Add rtmpmap
+                    md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec));
                     if (codec==Codecs.H264)
                     {
                         //Check if we are offering first
@@ -446,42 +602,40 @@ public class RTPParticipant extends Participant {
                         //Check packetization mode
                         if (h264packetization>0)
                             //Add profile and packetization mode
-                            formatLine += "a=fmtp:" + type + " profile-level-id="+h264profileLevelId+";packetization-mode="+h264packetization+"\r\n";
+                            md.addFormatAttribute(fmt,"profile-level-id="+h264profileLevelId+";packetization-mode="+h264packetization);
                         else
                             //Add profile id
-                            formatLine += "a=fmtp:" + type + " profile-level-id="+h264profileLevelId+"\r\n";
+                            md.addFormatAttribute(fmt,"profile-level-id="+h264profileLevelId);
                     } else if (codec==Codecs.H263_1996) {
-                        //Add profile id
-                        formatLine += "a=fmtp:" + type + " CIF=1;QCIF=1\r\n";
+                        //Add h263 supported sizes
+                        md.addFormatAttribute(fmt,"CIF=1;QCIF=1");
                     } else if (codec == Codecs.T140RED) {
                         //Find t140 codec
                         Integer t140 = findTypeForCodec(rtpInMap,Codecs.T140);
                         //Check that we have founf it
                         if (t140>0)
-                            //Add redundancy type
-                            formatLine += "a=fmtp:" + type + " " + t140 + "/" + t140 + "/" + t140 +"\r\n";
+                            //Add redundancy fmt
+                            md.addFormatAttribute(fmt,t140 + "/" + t140 + "/" + t140);
                     }
                 }
             }
         }
-        //End media line
-        mediaLine += "\r\n";
-
-        //If not format has been found
-        if (formatLine.isEmpty())
-        {
-            //Log
-            Logger.getLogger(RTPParticipant.class.getName()).log(Level.FINE, "addMediaToSdp no compatible codecs found for media {0} ", new Object[]{mediaName});
-            //Empty media line
-            return "m=" +mediaName + " 0 RTP/AVP\r\n";
-        }
 
         //If it is video and we have found the content attribute
         if (mediaName.equals("video") && !videoContentType.isEmpty())
-            mediaLine += "a=content:"+videoContentType+"\r\n";
+            //Add attribute
+            md.addAttribute("content",videoContentType);
 
-        //Return the media string
-        return mediaLine+formatLine;
+        //If not format has been found
+        if (md.getFormats().isEmpty())
+        {
+            //Log
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.FINE, "addMediaToSdp no compatible codecs found for media {0} ", new Object[]{mediaName});
+            //Disable
+            md.setPort(0);
+        }
+        //Return the media descriptor
+        return md;
     }
 
     private void proccesContent(String type, Object content) throws IOException {
@@ -529,105 +683,129 @@ public class RTPParticipant extends Participant {
                 Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
+        try {
         //Parse sdp
-        processSDP(sdp);
+            remoteSDP = processSDP(sdp);
+        } catch (IllegalArgumentException ex) {
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (ParserException ex) {
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
+    }
     }
 
-    public void processSDP(String content)
+    public SessionDescription processSDP(String body) throws IllegalArgumentException, ParserException
     {
-        //Search for the ip
-        int i = content.indexOf("\r\nc=IN IP4 ");
-        int j = content.indexOf("\r\n", i+1);
-        //Get the ip
-        String ip = content.substring(i + 11, j);
+        //Connnection IP
+        String ip = null;
+        //ICE credentials
+        String remoteICEFrag = null;
+        String remtoeICEPwd = null;
+
+        //Parse conent
+        SessionDescription sdp = SessionDescription.Parse(body);
+
+        //Get the connection field
+        Connection conn = sdp.getConnection();
+
+        if (conn!=null)
+        {
+            //Get IP addr
+            ip = conn.getAddress();
 
         //Check if ip should be nat for this media mixer
         if (conf.getMixer().isNated(ip))
             //Do natting
             ip = "0.0.0.0";
+        }
 
         //Disable supported media
         audioSupported = false;
         videoSupported = false;
         textSupported = false;
 
-        //Search the next media
-        int m = content.indexOf("\r\nm=", j);
+        //NO bitrate by default
+        videoBitrate = 0;
 
-        //Find bandwith
-        int b = content.indexOf("\r\nb=");
-
-        //If it is before the first media
-        if (b>0 && b<m)
+        //For each bandwith
+        for (Bandwidth band : sdp.getBandwidths())
         {
-            //Get :
-            i = content.indexOf(":",b);
-            //Get end of line
-            j = content.indexOf("\r\n", i);
-            //Get bandwith modifier
-            String bandwith = content.substring(b+4, i);
             //Get bitrate value
-            videoBitrate = Integer.parseInt(content.substring(i+1, j));
+            int rate = Integer.parseInt(band.getBandwidth());
+            //Check bandwith type
+            if (band.getType().equalsIgnoreCase("TIAS"))
+                    //Convert to kbps
+                    rate = rate/1000;
+            //Check bandwith type
+            if (band.getBandwidth().equalsIgnoreCase("TIAS"))
+                    //Convert to kbps
+                    videoBitrate = videoBitrate/1000;
             // Let some room for audio.
-            if (videoBitrate>=128)
+            if (rate>=128)
                 //Remove maximum rate
-                videoBitrate -= 64;
-        } else {
-            //NO bitrate by default
-            videoBitrate = 0;
+                rate -= 64;
+            //Check if is less
+            if (videoBitrate==0 || rate<videoBitrate)
+                //Set it
+                videoBitrate = rate;
         }
 
-        //Search medias
-        while (m>0)
+        //Check for global ice credentials
+        Attribute ufragAtrr = sdp.getAttribute("ice-ufrag");
+        Attribute pwdAttr = sdp.getAttribute("ice-pwd");
+
+        //Check if both present
+        if (ufragAtrr!=null && pwdAttr!=null)
+        {
+            //Using ice
+            useICE = true;
+            //Get values
+            remoteICEFrag = ufragAtrr.getValue();
+            remtoeICEPwd = pwdAttr.getValue();
+        }
+
+        for (MediaDescription md : sdp.getMedias())
         {
             //No default bitrate
             int mediaBitrate = 0;
 
-            //Search the first blanck
-            i = m + 4;
-            j = content.indexOf(" ", i);
             //Get media type
-            String media = content.substring(i, j);
-            //Store ini of media
-            int ini = m;
-            //Search the next media
-            m = content.indexOf("\r\nm=", j);
+            String media = md.getMedia();
 
-            //Search port
-            i = j + 1;
-            j = content.indexOf(" ", i);
             //Get port
-            String port = content.substring(i, j);
-
-            //Search transport
-            i = j + 1;
-            j = content.indexOf(" ", i);
+            Integer port = md.getPort();
             //Get transport
-            String transport = content.substring(i,j);
+            ArrayList<String> proto = md.getProto();
 
-           //Search format list
-            i = j + 1;
-            j = content.indexOf("\r\n", i);
-            //Get it
-            String fmtString = content.substring(i, j);
-
-            //Get fmts
-            StringTokenizer fmts  = new StringTokenizer(fmtString);
-
-            //Find bandwith modifier for media
-            b = content.indexOf("\r\nb=",ini);
-
-            //If it is in this media
-            if (b>0 && b<m)
+            //If it its not RTP
+            if (!proto.get(0).equals("RTP"))
             {
-                //Get :
-                i = content.indexOf(":", b);
-                //Get end of line
-                j = content.indexOf("\r\n", i);
-                //Get bandwith modifier
-                String bandwith = content.substring(b+4, i);
+                //Create media descriptor
+                MediaDescription rejected = new MediaDescription(media,0,md.getProtoString());
+                //set all  formats
+                rejected.setFormats(md.getFormats());
+                //add to rejected media
+                rejectedMedias.add(rejected);
+                //Not supported media type
+                continue;
+            }
+
+            //Get bandwiths
+            for (Bandwidth band : md.getBandwidths())
+            {
                 //Get bitrate value
-                mediaBitrate = Integer.parseInt(content.substring(i+1, j));
+                int rate = Integer.parseInt(band.getBandwidth());
+                //Check bandwith type
+                 if (band.getType().equalsIgnoreCase("TIAS"))
+                    //Convert to kbps
+                    rate = rate/1000;
+                //Check if less than current
+                if (mediaBitrate==0 || rate<mediaBitrate)
+                    //Set it
+                    mediaBitrate = rate;
+                //Check bandwith type
+                 if (band.getBandwidth().equalsIgnoreCase("TIAS"))
+                    //Convert to kbps
+                    mediaBitrate = mediaBitrate/1000;
             }
 
             //Add support for the media
@@ -635,20 +813,24 @@ public class RTPParticipant extends Participant {
                 //Set as supported
                 audioSupported = true;
             } else if (media.equals("video")) {
-                //Check for content attribute inside the media
-                i = content.indexOf("\r\na=content:", j);
+                //Get content attribute
+                Attribute content = md.getAttribute("content");
                 //Check if we found it inside this media
-                if (i>0 && (i<m || m<0))
+                if (content!=null)
                 {
-                    //Get end
-                    int k = content.indexOf("\r\n", i+1);
                     //Get it
-                    String mediaContentType = content.substring(i+12, k);
+                    String mediaContentType = content.getValue();
                     //Check if it is not main
                     if (!mediaContentType.equalsIgnoreCase("main"))
                     {
-                        //Add video content to the rejected media list
-                        rejectedMedias += "m="+media+" 0 "+transport+" "+fmtString+"\r\na=content:"+mediaContentType+"\r\n";
+                        //Create media descriptor
+                        MediaDescription rejected = new MediaDescription(media,0,md.getProtoString());
+                        //set all  formats
+                        rejected.setFormats(md.getFormats());
+                        //Add content attribute
+                        rejected.addAttribute(content);
+                        //add to rejected media
+                        rejectedMedias.add(rejected);
                         //Skip it
                         continue;
                     } else {
@@ -656,6 +838,8 @@ public class RTPParticipant extends Participant {
                         videoContentType = mediaContentType;
                     }
                 }
+                //Check if we have a media rate
+                if (mediaBitrate>0)
                 //Store bitrate
                 videoBitrate = mediaBitrate;
                 //Set as supported
@@ -664,8 +848,12 @@ public class RTPParticipant extends Participant {
                 //Set as supported
                 textSupported = true;
             } else {
-                //Add it to the rejected media lines
-                rejectedMedias += "m="+media+" 0 "+transport+" "+fmtString+"\r\n";
+                //Create media descriptor
+                MediaDescription rejected = new MediaDescription(media,0,md.getProtoString());
+                //set all  formats
+                rejected.setFormats(md.getFormats());
+                //add to rejected media
+                rejectedMedias.add(rejected);
                 //Not supported media type
                 continue;
             }
@@ -676,71 +864,85 @@ public class RTPParticipant extends Participant {
                 rtpOutMediaMap.put(media, new HashMap<Integer, Integer>());
 
             //Get all codecs
-            while (fmts.hasMoreTokens()) {
-                try {
-                    //Get codec
-                    Integer codec = Integer.parseInt(fmts.nextToken());
-                    //If it is static
-                    if (codec<96)
-                        //Put it in the map
-                        rtpOutMediaMap.get(media).put(codec,codec);
-                } catch (Exception e) {
-                    //Ignore non integer codecs, like '*' on application
-                }
-            }
-
             //No codec priority yet
             Integer priority = Integer.MAX_VALUE;
 
             //By default the media IP is the general IO
             String mediaIp = ip;
 
-            //Search for the ip inside the media
-            i = content.indexOf("\r\nc=IN IP4 ", j);
-
-            //Check if we found it inside this media
-            if (i>0 && (i<m || m<0))
+            //Get connection info
+            for (Connection c : md.getConnections())
             {
-                //Get end
-                int k = content.indexOf("\r\n", i+1);
                 //Get it
-                mediaIp = content.substring(i+11, k);
+                mediaIp = c.getAddress();
                 //Check if ip should be nat for this media mixer
                 if (conf.getMixer().isNated(mediaIp))
                     //Do natting
                     mediaIp = "0.0.0.0";
             }
 
-            //Search the first format in this media
-            int f = content.indexOf("a=rtpmap:", j);
+            //Get rtp profile
+            String rtpProfile = proto.get(1);
+            //Check if it is secure
+            if (rtpProfile.startsWith("S"))
+            {
+                //Secure (WARNING: if one media is secure, all will be secured, FIX!!)
+                isSecure = true;
+                //Create media crypto params
+                CryptoInfo info = new CryptoInfo();
+                //Get crypto header
+                CryptoAttribute crypto = (CryptoAttribute) md.getAttribute("crypto");
+                //Get suite
+                info.suite = crypto.getSuite();
+                //Get key
+                info.key = crypto.getFirstKeyParam().getInfo();
+                //Add it
+                remoteCryptoInfo.put(media, info);
+            }
+            //Check if has rtcp
+            if (rtpProfile.endsWith("F"))
+                //With feedback (WARNING: if one media has feedback, all will have feedback, FIX!!)
+                rtcpFeedBack = true;
+
 
             //FIX
             Integer h264type = 0;
             String maxh264profile = "";
-            //Check there is one format and it's from this media
-            while (f > 0 && (m < 0 || f < m)) {
-                //Get the format
-                i = content.indexOf(" ", f + 10);
-                j = content.indexOf("/", i);
-                 //Get the codec type
-                Integer type = Integer.parseInt(content.substring(f+9,i));
+
+            //For each format
+            for (String fmt : md.getFormats())
+            {
+                Integer type = 0;
+                try {
+                    //Get codec
+                    type = Integer.parseInt(fmt);
+                } catch (Exception e) {
+                    //Ignore non integer codecs, like '*' on application
+                    continue;
+                }
+
+                //If it is dinamic
+                if (type>=96)
+                {
+                    //Get map
+                    RTPMapAttribute rtpMap = md.getRTPMap(type);
+                    //Check it has mapping
+                    if (rtpMap==null)
+                        //Skip this one
+                        continue;
                 //Get the media type
-                String codecName = content.substring(i+1, j);
+                    String codecName = rtpMap.getName();
                 //Get codec for name
                 Integer codec = Codecs.getCodecForName(media,codecName);
                 //if it is h264 TODO: FIIIIX!!!
                 if (codec==Codecs.H264)
                 {
-                    //start of fmtp line
-                    String start = "a=fmtp:"+type;
-                    //Check if we have format for it
-                    int k = content.indexOf(start,ini);
-                    //If we have it
-                    if (k!=-1)
-                    {
+                        int k = -1;
                         //Get ftmp line
-                        String ftmpLine = content.substring(k,content.indexOf("\r\n",k));
-                        //Get profile id
+                        String ftmpLine = md.getFormatParameters(type);
+                        //Check if got format
+                        if (ftmpLine!=null)
+                            //Find profile
                         k = ftmpLine.indexOf("profile-level-id=");
                         //Check it
                         if (k!=-1)
@@ -759,7 +961,6 @@ public class RTPParticipant extends Participant {
                                     //Set it
                                     h264packetization = 1;
                             }
-                        }
                     } else {
                         //check if no profile has been received so far
                         if (maxh264profile.isEmpty())
@@ -770,8 +971,10 @@ public class RTPParticipant extends Participant {
                     //Set codec mapping
                      rtpOutMediaMap.get(media).put(type,codec);
                 }
-                //Get next
-                f = content.indexOf("a=rtpmap:", j);
+                } else {
+                    //Static, put it in the map
+                    rtpOutMediaMap.get(media).put(type,type);
+            }
             }
 
             //Check if we have type for h264
@@ -781,6 +984,23 @@ public class RTPParticipant extends Participant {
                 h264profileLevelId = maxh264profile;
                 //add it
                 rtpOutMediaMap.get(media).put(h264type,Codecs.H264);
+            }
+
+            //ICE credentials
+            String remoteMediaICEFrag = remoteICEFrag;
+            String remtoeMediaICEPwd = remtoeICEPwd;
+            //Check for global ice credentials
+            ufragAtrr = md.getAttribute("ice-ufrag");
+            pwdAttr = md.getAttribute("ice-pwd");
+
+            //Check if both present
+            if (ufragAtrr!=null && pwdAttr!=null)
+            {
+                //Using ice
+                useICE = true;
+                //Get values
+                remoteMediaICEFrag = ufragAtrr.getValue();
+                remtoeMediaICEPwd = pwdAttr.getValue();
             }
 
             //For each entry
@@ -801,10 +1021,11 @@ public class RTPParticipant extends Participant {
                             if (priority==Integer.MAX_VALUE)
                             {
                                 //Set port
-                                setSendAudioPort(Integer.parseInt(port));
+                                setSendAudioPort(port);
                                 //And Ip
                                 setSendAudioIp(mediaIp);
-                            }                            //Check if we have a lower priority
+                            }
+                            //Check if we have a lower priority
                             if (index<priority)
                             {
                                 //Store priority
@@ -829,7 +1050,7 @@ public class RTPParticipant extends Participant {
                             if (priority==Integer.MAX_VALUE)
                             {
                                 //Set port
-                                setSendVideoPort(Integer.parseInt(port));
+                                setSendVideoPort(port);
                                 //And Ip
                                 setSendVideoIp(mediaIp);
                             }
@@ -858,7 +1079,7 @@ public class RTPParticipant extends Participant {
                             if (priority==Integer.MAX_VALUE)
                             {
                                 //Set port
-                                setSendTextPort(Integer.parseInt(port));
+                                setSendTextPort(port);
                                 //And Ip
                                 setSendTextIp(mediaIp);
                             }                            //Check if we have a lower priority
@@ -873,7 +1094,12 @@ public class RTPParticipant extends Participant {
                     }
                 }
             }
+            //Check ice credentials
+            if (remoteMediaICEFrag!=null && remtoeMediaICEPwd!=null)
+                    //Create info and add to remote ones
+                    remoteICEInfo.put(media, new ICEInfo(remoteMediaICEFrag,remtoeMediaICEPwd));
         }
+        return sdp;
     }
 
     public void onInfoRequest(SipServletRequest request) throws IOException {
@@ -933,6 +1159,8 @@ public class RTPParticipant extends Participant {
         address = request.getFrom();
         //Get name
         name = getUsernameDomain();
+        //Get call id
+        setSessionId(request.getCallId());
         //Create ringing
         SipServletResponse resp = request.createResponse(180, "Ringing");
         //Send it
@@ -1056,6 +1284,8 @@ public class RTPParticipant extends Participant {
         if (proxy!=null)
             //Set proxy
             inviteRequest.pushRoute(proxy);
+        //Get call id
+        setSessionId(inviteRequest.getCallId());
         //Get sip session
         session = inviteRequest.getSession();
         //Set reference in sessions
@@ -1144,9 +1374,9 @@ public class RTPParticipant extends Participant {
             address = resp.getTo();
             //Update name
             name = getUsernameDomain();
-            //Parse sdp
-            processSDP(new String((byte[])resp.getContent()));
             try {
+                //Parse sdp
+                remoteSDP = processSDP(new String((byte[])resp.getContent()));
                 //Create ringing
                 SipServletRequest ack = resp.createAck();
                 //Send it
@@ -1157,8 +1387,8 @@ public class RTPParticipant extends Participant {
                 conf.joinParticipant(this);
                 //Start sending
                 startSending();
-            } catch (XmlRpcException ex) {
-                Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (Exception ex) {
+                Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, "Error processing invite respose", ex);
                 //Terminate
                 error(State.ERROR,"Error");
             }
@@ -1375,6 +1605,12 @@ public class RTPParticipant extends Participant {
         {
             //Set codec
             client.SetAudioCodec(confId, id, getAudioCodec());
+            //Get cryto info
+            CryptoInfo info = remoteCryptoInfo.get("audio");
+            //If present
+            if (info!=null)
+                //Set it
+               client.SetRemoteCryptoSDES(confId, id, MediaType.AUDIO, info.suite, info.key);
             //Send
             client.StartSending(confId, id, MediaType.AUDIO, getSendAudioIp(), getSendAudioPort(), getRtpOutMediaMap("audio"));
             //Sending Audio
@@ -1391,7 +1627,13 @@ public class RTPParticipant extends Participant {
                     //Reduce it
                     bitrate = videoBitrate;
             //Set codec
-            client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize() , profile.getVideoFPS(), bitrate, 0, 0, profile.getIntraPeriod());
+            client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize() , profile.getVideoFPS(), bitrate,0, 0, profile.getIntraPeriod());
+            //Get cryto info
+            CryptoInfo info = remoteCryptoInfo.get("video");
+            //If present
+            if (info!=null)
+                //Set it
+               client.SetRemoteCryptoSDES(confId, id, MediaType.VIDEO, info.suite, info.key);
             //Send
             client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
             //Sending Video
@@ -1403,6 +1645,12 @@ public class RTPParticipant extends Participant {
         {
             //Set codec
             client.SetTextCodec(confId, id, getTextCodec());
+            //Get cryto info
+            CryptoInfo info = remoteCryptoInfo.get("text");
+            //If present
+            if (info!=null)
+                //Set it
+               client.SetRemoteCryptoSDES(confId, id, MediaType.TEXT, info.suite, info.key);
             //Send
             client.StartSending(confId, id, MediaType.TEXT, getSendTextIp(), getSendTextPort(), getRtpOutMediaMap("text"));
             //Sending Text
@@ -1421,6 +1669,26 @@ public class RTPParticipant extends Participant {
         {
             //Create rtp map for audio
             createRTPMap("audio");
+            //Check if we are secure
+            if (isSecure)
+            {
+                //Create new cypher
+                CryptoInfo info = CryptoInfo.Generate();
+                //Set it
+                client.SetLocalCryptoSDES(confId, id, MediaType.AUDIO, info.suite, info.key);
+                //Add to local info
+                localCryptoInfo.put("audio", info);
+            }
+            //Check if using ICE
+            if (useICE)
+            {
+                //Create new ICE Info
+                ICEInfo info = ICEInfo.Generate();
+                //Set them
+                client.SetLocalSTUNCredentials(confId, id, MediaType.AUDIO, info.pwd, info.pwd);
+                //Add to local info
+                localICEInfo.put("audio", info);
+            }
             //Get receiving ports
             recAudioPort = client.StartReceiving(confId, id, MediaType.AUDIO, getRtpInMediaMap("audio"));
         }
@@ -1430,6 +1698,26 @@ public class RTPParticipant extends Participant {
         {
             //Create rtp map for video
             createRTPMap("video");
+            //Check if we are secure
+            if (isSecure)
+            {
+                //Create new cypher
+                CryptoInfo info = CryptoInfo.Generate();
+                //Set it
+                client.SetLocalCryptoSDES(confId, id, MediaType.VIDEO, info.suite, info.key);
+                //Add to local info
+                localCryptoInfo.put("video", info);
+            }
+            //Check if using ICE
+            if (useICE)
+            {
+                //Create new ICE Info
+                ICEInfo info = ICEInfo.Generate();
+                //Set them
+                client.SetLocalSTUNCredentials(confId, id, MediaType.VIDEO, info.pwd, info.pwd);
+                //Add to local info
+                localICEInfo.put("video", info);
+            }
             //Get receiving ports
             recVideoPort = client.StartReceiving(confId, id, MediaType.VIDEO, getRtpInMediaMap("video"));
         }
@@ -1439,6 +1727,26 @@ public class RTPParticipant extends Participant {
         {
             //Create rtp map for text
             createRTPMap("text");
+            //Check if we are secure
+            if (isSecure)
+            {
+                //Create new cypher
+                CryptoInfo info = CryptoInfo.Generate();
+                //Set it
+                client.SetLocalCryptoSDES(confId, id, MediaType.TEXT, info.suite, info.key);
+                //Add to local info
+                localCryptoInfo.put("text", info);
+            }
+            //Check if using ICE
+            if (useICE)
+            {
+                //Create new ICE Info
+                ICEInfo info = ICEInfo.Generate();
+                //Set them
+                client.SetLocalSTUNCredentials(confId, id, MediaType.TEXT, info.pwd, info.pwd);
+                //Add to local info
+                localICEInfo.put("text", info);
+            }
             //Get receiving ports
             recTextPort = client.StartReceiving(confId, id, MediaType.TEXT, getRtpInMediaMap("text"));
         }

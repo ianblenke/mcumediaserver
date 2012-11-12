@@ -19,8 +19,8 @@
 
 package org.murillo.mcuWeb;
 
-import com.sun.org.apache.xml.internal.serialize.XMLSerializer;
 import java.beans.XMLDecoder;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -29,12 +29,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.naming.Context;
-import javax.naming.InitialContext;
-import javax.naming.NamingException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerException;
 import org.apache.xmlrpc.XmlRpcException;
 import java.util.UUID;
 import javax.servlet.ServletContext;
@@ -42,6 +40,10 @@ import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipURI;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import org.murillo.MediaServer.Codecs;
 import org.murillo.MediaServer.XmlRpcBroadcasterClient;
 import org.murillo.MediaServer.XmlRpcMcuClient;
@@ -227,11 +229,10 @@ public class ConferenceMngr implements Conference.Listener {
             }
 
             //Serrialize to file
-            XMLSerializer serializer = new XMLSerializer();
-            serializer.setOutputCharStream(new java.io.FileWriter(confDir+"mixers.xml"));
-            serializer.serialize(doc);
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.transform(new DOMSource(doc),  new StreamResult(new File(confDir+"mixers.xml")));
 
-        } catch (IOException ex) {
+        } catch (TransformerException ex) {
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
         } catch (ParserConfigurationException ex) {
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
@@ -271,11 +272,9 @@ public class ConferenceMngr implements Conference.Listener {
             }
 
             //Serrialize to file
-            XMLSerializer serializer = new XMLSerializer();
-            serializer.setOutputCharStream(new java.io.FileWriter(confDir+"templates.xml"));
-            serializer.serialize(doc);
-
-        } catch (IOException ex) {
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.transform(new DOMSource(doc),  new StreamResult(new File(confDir+"templates.xml")));
+        } catch (TransformerException ex) {
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
         } catch (ParserConfigurationException ex) {
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
@@ -311,11 +310,9 @@ public class ConferenceMngr implements Conference.Listener {
             }
 
             //Serrialize to file
-            XMLSerializer serializer = new XMLSerializer();
-            serializer.setOutputCharStream(new java.io.FileWriter(confDir+"profiles.xml"));
-            serializer.serialize(doc);
-
-        } catch (IOException ex) {
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.transform(new DOMSource(doc),  new StreamResult(new File(confDir+"profiles.xml")));
+        } catch (TransformerException ex) {
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
         } catch (ParserConfigurationException ex) {
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);

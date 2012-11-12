@@ -22,8 +22,6 @@
     <jsp-config>
         <jsp-property-group>
             <url-pattern>/viewConference.jsp</url-pattern>
-            <include-prelude/>
-            <include-coda/>
         </jsp-property-group>
         <jsp-property-group>
             <url-pattern>*.jsp</url-pattern>

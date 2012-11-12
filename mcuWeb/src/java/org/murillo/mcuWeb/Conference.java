@@ -117,6 +117,7 @@ public class Conference implements Participant.Listener {
         addSupportedCodec("audio", Codecs.SPEEX16);
         //Enable all video codecs
         addSupportedCodec("video", Codecs.H264);
+        addSupportedCodec("video", Codecs.VP8);
         addSupportedCodec("video", Codecs.H263_1998);
         addSupportedCodec("video", Codecs.H263_1996);
         //Enable all text codecs

@@ -20,6 +20,7 @@
 package org.murillo.mcuWeb;
 
 import java.io.*;
+import java.util.HashMap;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 import java.util.logging.Level;
@@ -125,6 +126,19 @@ public class MCUHttpServlet extends HttpServlet {
                 String  uid  = request.getParameter("uid");
                 //Call
                 confMngr.removeConference(uid);
+                //Redirect
+                response.sendRedirect(path);
+            } else if (method.equals("removeAllConferencesByDID")) {
+                //Get parameters
+                String  did  = request.getParameter("did");
+                //Get conferences
+                HashMap<String, Conference> conferences = confMngr.getConferences();
+                //For each one
+                for (Conference conf : conferences.values())
+                    //If the DID is matched
+                    if (conf.getDID().equals(did))
+                        //Call
+                        conf.destroy();
                 //Redirect
                 response.sendRedirect(path);
             } else if (method.equals("createBroadcast")) {

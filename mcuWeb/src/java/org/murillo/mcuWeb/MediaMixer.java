@@ -46,26 +46,32 @@ public class MediaMixer implements Serializable {
 
     /** Creates a new instance of MediaMixer */
     public MediaMixer(String name,String url,String ip,String publicIp,String localNet) throws MalformedURLException {
-            //Save Values
-            this.name = name;
+        //Save Values
+        this.name = name;
+        //Check if it ends with "/"
+        if (url.endsWith("/"))
+            //Remove it
+            this.url = url.substring(0,url.length()-1);
+        else
+            //Copy all
             this.url = url;
-            this.ip = ip;
-            this.publicIp = publicIp;
-            //Create default client
-            client = new XmlRpcMcuClient(url + "/mcu");
-            //Create client list
-            mcuClients = new HashSet<XmlRpcMcuClient>();
-            try {
-                //parse it
-                this.localNet = new SubNetInfo(localNet);
-            } catch (UnknownHostException ex) {
-                //Log
-                Logger.getLogger(MediaMixer.class.getName()).log(Level.SEVERE, null, ex);
-                //Create empty one
-                this.localNet = new SubNetInfo(new byte[]{0,0,0,0},0);
-            }
-            //NO state
-            state = "";
+        this.ip = ip;
+        this.publicIp = publicIp;
+        //Check if it has a last "/"
+        client = new XmlRpcMcuClient(url + "/mcu");
+        //Create client list
+        mcuClients = new HashSet<XmlRpcMcuClient>();
+        try {
+            //parse it
+            this.localNet = new SubNetInfo(localNet);
+        } catch (UnknownHostException ex) {
+            //Log
+            Logger.getLogger(MediaMixer.class.getName()).log(Level.SEVERE, null, ex);
+            //Create empty one
+            this.localNet = new SubNetInfo(new byte[]{0,0,0,0},0);
+        }
+        //NO state
+        state = "";
     }
 
     public String getName() {
