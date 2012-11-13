@@ -48,6 +48,7 @@ import org.murillo.util.ThreadPool;
 public class Conference implements Participant.Listener {
 
     public interface Listener {
+        public void onConferenceInited(Conference conf);
         public void onConferenceEnded(Conference conf);
         public void onParticipantCreated(String confId, Participant part);
         public void onParticipantStateChanged(String confId, Integer partId, State state, Object data, Participant part);
@@ -135,6 +136,11 @@ public class Conference implements Participant.Listener {
         autoAccept = true;
         //Not isDestroying
         isDestroying = false;
+    }
+
+    public void init() {
+        //We are inited
+        fireOnConferenceInited();
     }
 
     public void destroy() {
@@ -619,83 +625,39 @@ public class Conference implements Participant.Listener {
          listeners.remove(listener);
      }
 
+     private void fireOnConferenceInited() {
+        //For each listener in set
+        for (Listener listener : listeners)
+            //Send it
+            listener.onConferenceInited(this);
+     }
+
      private void fireOnConferenceEnded() {
-         //Check listeners
-        if (listeners.isEmpty())
-            //Exit
-            return;
-        //Store conference
-        final Conference conf = this;
-        //Launch asing
-        ThreadPool.Execute(new Runnable() {
-            @Override
-            public void run() {
-                    //For each listener in set
-                    for (Listener listener : listeners)
-                        //Send it
-                        listener.onConferenceEnded(conf);
-            }
-        });
-
+        //For each listener in set
+        for (Listener listener : listeners)
+            //Send it
+            listener.onConferenceEnded(this);
     }
 
-     private void fireOnParticipantCreated(final Participant part) {
-         //Check listeners
-        if (listeners.isEmpty())
-            //Exit
-            return;
-        //Store conference
-        final Conference conf = this;
-        //Launch asing
-        ThreadPool.Execute(new Runnable() {
-            @Override
-            public void run() {
-                    //For each listener in set
-                    for (Listener listener : listeners)
-                        //Send it
-                        listener.onParticipantCreated(conf.getUID(),part);
-            }
-        });
-
+    private void fireOnParticipantCreated(Participant part) {
+        //For each listener in set
+        for (Listener listener : listeners)
+            //Send it
+            listener.onParticipantCreated(getUID(),part);
     }
 
-      private void fireOnParticipantDestroyed(final Participant part) {
-         //Check listeners
-        if (listeners.isEmpty())
-            //Exit
-            return;
-        //Store conference
-        final Conference conf = this;
-        //Launch asing
-        ThreadPool.Execute(new Runnable() {
-            @Override
-            public void run() {
-                    //For each listener in set
-                    for (Listener listener : listeners)
-                        //Send it
-                        listener.onParticipantDestroyed(conf.getUID(),part.getId());
-            }
-        });
-
+      private void fireOnParticipantDestroyed(Participant part) {
+        //For each listener in set
+        for (Listener listener : listeners)
+            //Send it
+            listener.onParticipantDestroyed(getUID(),part.getId());
     }
 
-    private void fireOnParticipantStateChanged(final Participant participant,final State state, final Object data) {
-         //Check listeners
-        if (listeners.isEmpty())
-            //Exit
-            return;
-        //Store conference
-        final Conference conf = this;
-        //Launch asing
-        ThreadPool.Execute(new Runnable() {
-            @Override
-            public void run() {
-                    //For each listener in set
-                    for (Listener listener : listeners)
-                        //Send it
-                        listener.onParticipantStateChanged(conf.getUID(), participant.getId(), state, data, participant);
-            }
-        });
+    private void fireOnParticipantStateChanged(Participant participant,State state, Object data) {
+        //For each listener in set
+        for (Listener listener : listeners)
+            //Send it
+            listener.onParticipantStateChanged(getUID(), participant.getId(), state, data, participant);
     }
 
     void requestFPU(Integer partId) throws ParticipantNotFoundException {

@@ -19,7 +19,6 @@
 
 package org.murillo.mcuWeb;
 
-import java.beans.XMLDecoder;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -74,13 +73,12 @@ public class ConferenceMngr implements Conference.Listener {
     private String confDir;
     private final HashSet<Listener> listeners;
     private SipFactory sf;
-
+    
     public ConferenceMngr(ServletContext context) {
-        XMLDecoder decoder;
+
 
         //Store conf directory
         confDir = "";
-
         //Create empty maps
         mixers = new HashMap<String,MediaMixer>();
         profiles = new HashMap<String,Profile>();
@@ -416,6 +414,8 @@ public class ConferenceMngr implements Conference.Listener {
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "Created conference {0}", conf.getUID());
             //Launch event
             fireOnConferenceCreatead(conf);
+            //Init
+            conf.init();
         }  catch (XmlRpcException ex) {
             //Log error
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, "Fail to communicate with media mixer [mixerId:{0},error:\"{1}\"]", new Object[]{mixer.getUID(),ex.getMessage()});
@@ -483,6 +483,8 @@ public class ConferenceMngr implements Conference.Listener {
         }
         //Launch event
         fireOnConferenceCreatead(conf);
+        //Init
+        conf.init();
         //Return
         return conf;
     }
@@ -540,7 +542,7 @@ public class ConferenceMngr implements Conference.Listener {
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
         }
         //Add token playback url
-        return new RTMPUrl("rtmp://"+mixer.getPublicIp()+"/broadcaster",token);
+        return new RTMPUrl("rtmp://"+mixer.getPublicIp()+"/broadcaster/watcher/"+token,bcast.getTag());
     }
 
      public RTMPUrl addConferenceToken(String UID) throws ConferenceNotFoundExcetpion {
@@ -859,7 +861,7 @@ public class ConferenceMngr implements Conference.Listener {
         String name = request.getFrom().getDisplayName();
 
         //LOg
-        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "found conference confId={0}", conf.getId());
+        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "found conference confId={0}", conf.getUID());
         //If empty
         if (name==null || name.isEmpty() || name.equalsIgnoreCase("anonymous"))
             //Set to user
@@ -884,6 +886,11 @@ public class ConferenceMngr implements Conference.Listener {
         conferences.remove(confId);
         //fire event
         fireOnConferenceDestroyed(confId);
+    }
+
+    public void onConferenceInited(Conference conf) {
+        //Log
+        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINE, "conference inited confId={0}", new Object[]{conf.getId()});
     }
 
     public void onParticipantCreated(String confId, Participant part) {
