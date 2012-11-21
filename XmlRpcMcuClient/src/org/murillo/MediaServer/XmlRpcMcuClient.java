@@ -305,6 +305,17 @@ public class XmlRpcMcuClient {
         //Return
         return true;
     }
+     
+    public boolean SetRemoteSTUNCredentials(Integer confId,Integer partId,MediaType media,String username,String pwd) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,partId,media.valueOf(),username,pwd};
+        //Execute
+        HashMap response = (HashMap) client.execute("SetRemoteSTUNCredentials", request);
+        //Return
+        return true;
+    }
+
 
     public boolean SetLocalCryptoSDES(Integer confId,Integer partId,MediaType media,String suite,String key) throws XmlRpcException
     {
