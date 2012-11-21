@@ -56,6 +56,7 @@ import org.murillo.sdp.Connection;
 import org.murillo.sdp.CryptoAttribute;
 import org.murillo.sdp.MediaDescription;
 import org.murillo.sdp.RTPMapAttribute;
+import org.murillo.sdp.SSRCAttribute;
 import org.murillo.sdp.SessionDescription;
 
 /**
@@ -532,8 +533,14 @@ public class RTPParticipant extends Participant {
         //Create new meida description with default values
         MediaDescription md = new MediaDescription(mediaName,port,"RTP/"+rtpProfile);
 
+        //Send and receive
+        md.addAttribute("sendrecv");
+
         //Enable rtcp muxing
         md.addAttribute("rtcp-mux");
+
+        //Set media id
+        md.addAttribute("mid",mediaName);
 
         //Check if rtp map exist
         HashMap<Integer, Integer> rtpInMap = rtpInMediaMap.get(mediaName);
@@ -569,13 +576,19 @@ public class RTPParticipant extends Participant {
             }
         }
 
-        //Get Crypto info for media
-        CryptoInfo info = remoteCryptoInfo.get(mediaName);
+        //Get Crypto info for local media
+        CryptoInfo info = localCryptoInfo.get(mediaName);
 
         //f we have crytpo info
         if (info!=null)
             //Append attribute
             md.addAttribute( new CryptoAttribute(1, info.suite, "inline", info.key));
+
+        //Add ssrc info
+        md.addAttribute(new SSRCAttribute(new Long(port), "cname",  getId() +"+"+conf.getUID()));
+        md.addAttribute(new SSRCAttribute(new Long(port), "label",  conf.getUID()));
+        md.addAttribute(new SSRCAttribute(new Long(port), "msid",   conf.getUID() + " " + mediaName + getId()));
+        md.addAttribute(new SSRCAttribute(new Long(port), "mslabel",conf.getUID() + mediaName + getId()));
 
         //Add rtmpmap for each codec in supported order
         for (Integer codec : supportedCodecs.get(mediaName))
@@ -1611,6 +1624,12 @@ public class RTPParticipant extends Participant {
             if (info!=null)
                 //Set it
                client.SetRemoteCryptoSDES(confId, id, MediaType.AUDIO, info.suite, info.key);
+            //Get ice info
+            ICEInfo ice = remoteICEInfo.get("audio");
+            //If present
+            if (ice!=null)
+                //Set it
+               client.SetRemoteSTUNCredentials(confId, id, MediaType.AUDIO, ice.ufrag, ice.pwd);
             //Send
             client.StartSending(confId, id, MediaType.AUDIO, getSendAudioIp(), getSendAudioPort(), getRtpOutMediaMap("audio"));
             //Sending Audio
@@ -1634,6 +1653,12 @@ public class RTPParticipant extends Participant {
             if (info!=null)
                 //Set it
                client.SetRemoteCryptoSDES(confId, id, MediaType.VIDEO, info.suite, info.key);
+                        //Get ice info
+            ICEInfo ice = remoteICEInfo.get("video");
+            //If present
+            if (ice!=null)
+                //Set it
+               client.SetRemoteSTUNCredentials(confId, id, MediaType.VIDEO, ice.ufrag, ice.pwd);
             //Send
             client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
             //Sending Video
@@ -1651,6 +1676,12 @@ public class RTPParticipant extends Participant {
             if (info!=null)
                 //Set it
                client.SetRemoteCryptoSDES(confId, id, MediaType.TEXT, info.suite, info.key);
+            //Get ice info
+            ICEInfo ice = remoteICEInfo.get("text");
+            //If present
+            if (ice!=null)
+                //Set it
+               client.SetRemoteSTUNCredentials(confId, id, MediaType.TEXT, ice.ufrag, ice.pwd);
             //Send
             client.StartSending(confId, id, MediaType.TEXT, getSendTextIp(), getSendTextPort(), getRtpOutMediaMap("text"));
             //Sending Text
@@ -1685,7 +1716,7 @@ public class RTPParticipant extends Participant {
                 //Create new ICE Info
                 ICEInfo info = ICEInfo.Generate();
                 //Set them
-                client.SetLocalSTUNCredentials(confId, id, MediaType.AUDIO, info.pwd, info.pwd);
+                client.SetLocalSTUNCredentials(confId, id, MediaType.AUDIO, info.ufrag, info.pwd);
                 //Add to local info
                 localICEInfo.put("audio", info);
             }
@@ -1714,7 +1745,7 @@ public class RTPParticipant extends Participant {
                 //Create new ICE Info
                 ICEInfo info = ICEInfo.Generate();
                 //Set them
-                client.SetLocalSTUNCredentials(confId, id, MediaType.VIDEO, info.pwd, info.pwd);
+                client.SetLocalSTUNCredentials(confId, id, MediaType.VIDEO, info.ufrag, info.pwd);
                 //Add to local info
                 localICEInfo.put("video", info);
             }
@@ -1743,7 +1774,7 @@ public class RTPParticipant extends Participant {
                 //Create new ICE Info
                 ICEInfo info = ICEInfo.Generate();
                 //Set them
-                client.SetLocalSTUNCredentials(confId, id, MediaType.TEXT, info.pwd, info.pwd);
+                client.SetLocalSTUNCredentials(confId, id, MediaType.TEXT, info.ufrag, info.pwd);
                 //Add to local info
                 localICEInfo.put("text", info);
             }
