@@ -428,7 +428,7 @@ public class Conference implements Participant.Listener {
 
     boolean acceptParticipant(Integer partId, Integer mosaicId) throws XmlRpcException, ParticipantNotFoundException {
         //Get the participant
-            Participant part = getParticipant(partId);
+        Participant part = getParticipant(partId);
 
         //Set mosaic for participant
         client.SetParticipantMosaic(id,partId,mosaicId);
@@ -437,9 +437,6 @@ public class Conference implements Participant.Listener {
         if (!part.accept())
                 //Exit
                 return false;
-
-        //Join it
-        joinParticipant(part);
         //ok
         return true;
     }

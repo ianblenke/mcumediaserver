@@ -99,6 +99,7 @@ public class RTPParticipant extends Participant {
     private final String h264profileLevelIdDefault = "428014";
     private int videoBitrate;
     private SessionDescription remoteSDP;
+    private SessionDescription localSDP;
     private Boolean isSecure;
     private Boolean rtcpFeedBack;
     private HashMap<String,CryptoInfo> localCryptoInfo;
@@ -106,6 +107,10 @@ public class RTPParticipant extends Participant {
     private boolean useICE;
     private HashMap<String,ICEInfo> localICEInfo;
     private HashMap<String,ICEInfo> remoteICEInfo;
+    private HashMap<String,HashMap<String,String>> rtpMediaProperties;
+
+
+    
 
     private static class CryptoInfo
     {
@@ -216,6 +221,12 @@ public class RTPParticipant extends Participant {
          //Create ICE info maps
         localICEInfo = new HashMap<String, ICEInfo>();
         remoteICEInfo = new HashMap<String, ICEInfo>();
+        //RTP media properties
+        rtpMediaProperties = new HashMap<String, HashMap<String, String>>(3);
+        //Add default properties
+        rtpMediaProperties.put("audio",new HashMap<String,String>());
+        rtpMediaProperties.put("video",new HashMap<String,String>());
+        rtpMediaProperties.put("text",new HashMap<String,String>());
         //Has RTCP feedback
         rtcpFeedBack = false;
 }
@@ -444,7 +455,7 @@ public class RTPParticipant extends Participant {
         return rtpOutMediaMap.get(media);
     }
 
-    public String createSDP() {
+    public SessionDescription createSDP() {
 
         SessionDescription sdp = new SessionDescription();
 
@@ -475,7 +486,7 @@ public class RTPParticipant extends Participant {
             sdp.addMedia(md);
 
         //Return
-        return sdp.toString();
+        return sdp;
     }
 
     public void createRTPMap(String media)
@@ -584,11 +595,26 @@ public class RTPParticipant extends Participant {
             //Append attribute
             md.addAttribute( new CryptoAttribute(1, info.suite, "inline", info.key));
 
-        //Add ssrc info
-        md.addAttribute(new SSRCAttribute(new Long(port), "cname",  getId() +"+"+conf.getUID()));
-        md.addAttribute(new SSRCAttribute(new Long(port), "label",  conf.getUID()));
-        md.addAttribute(new SSRCAttribute(new Long(port), "msid",   conf.getUID() + " " + mediaName + getId()));
-        md.addAttribute(new SSRCAttribute(new Long(port), "mslabel",conf.getUID() + mediaName + getId()));
+        //Only for webrtc participants
+        if (rtcpFeedBack)
+        {
+            //Create ramdon ssrc
+            Long ssrc = Math.round(Math.random()*Integer.MAX_VALUE);
+            //Set cname
+            String cname = getId()+"@"+conf.getUID();
+            //Label
+            String label = conf.getUID();
+            //Set app id
+            String appId = mediaName.substring(0,1)+"0";
+            //Add ssrc info
+            md.addAttribute(new SSRCAttribute(ssrc, "cname"     ,cname));
+            md.addAttribute(new SSRCAttribute(ssrc, "mslabel"   ,label));
+            md.addAttribute(new SSRCAttribute(ssrc, "msid"      ,label+" " + appId));
+            md.addAttribute(new SSRCAttribute(ssrc, "label"     ,label+appId));
+            //Set attributes
+            rtpMediaProperties.get(mediaName).put("ssrc", ssrc.toString());
+            rtpMediaProperties.get(mediaName).put("cname", cname);
+        }
 
         //Add rtmpmap for each codec in supported order
         for (Integer codec : supportedCodecs.get(mediaName))
@@ -697,8 +723,14 @@ public class RTPParticipant extends Participant {
             }
         }
         try {
-        //Parse sdp
+            //Parse sdp
             remoteSDP = processSDP(sdp);
+            //Check if also have local SDP
+            if (localSDP!=null)
+                //Negotiation done
+                onSDPNegotiationDone();
+        } catch (XmlRpcException ex) {
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IllegalArgumentException ex) {
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
         } catch (ParserException ex) {
@@ -820,6 +852,11 @@ public class RTPParticipant extends Participant {
                     //Convert to kbps
                     mediaBitrate = mediaBitrate/1000;
             }
+
+            //Check if it supports rtcp-muxing
+            if (md.hasAttribute("rtcp-mux"))
+                //Add attribute
+                rtpMediaProperties.get("audio").put("rtcp-mux", "1");
 
             //Add support for the media
             if (media.equals("audio")) {
@@ -1221,8 +1258,14 @@ public class RTPParticipant extends Participant {
             startReceiving();
             //Create final response
             SipServletResponse resp = inviteRequest.createResponse(200, "Ok");
+            //Create local SDP
+            localSDP = createSDP();
+            //If also have remote SDP on the previoues INVITE
+            if (remoteSDP!=null)
+                //Negotiation done
+                onSDPNegotiationDone();
             //Attach body
-            resp.setContent(createSDP(),"application/sdp");
+            resp.setContent(localSDP.toString(),"application/sdp");
             //Send it
             resp.send();
         } catch (Exception ex) {
@@ -1310,11 +1353,14 @@ public class RTPParticipant extends Participant {
         //Set expire time
         appSession.setExpires(timeout);
         //Create sdp
-        String sdp = createSDP();
+        localSDP = createSDP();
+        //Convert to
+        String sdp = localSDP.toString();
         //If it has location info
         if (location!=null && !location.isEmpty())
         {
             try {
+
                 //Get SIP uri of calling user
                 SipURI uri = (SipURI)from.getURI();
                 //Add location header
@@ -1390,6 +1436,10 @@ public class RTPParticipant extends Participant {
             try {
                 //Parse sdp
                 remoteSDP = processSDP(new String((byte[])resp.getContent()));
+                //Check if also have local SDP
+                if (localSDP!=null)
+                    //Negotiation done
+                    onSDPNegotiationDone();
                 //Create ringing
                 SipServletRequest ack = resp.createAck();
                 //Send it
@@ -1814,5 +1864,27 @@ public class RTPParticipant extends Participant {
             //Log it
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, "Error while requesting FPU for participant", ex);
         }
+    }
+
+    private void onSDPNegotiationDone() throws XmlRpcException {
+        //Get client
+        XmlRpcMcuClient client = conf.getMCUClient();
+        //Get conf id
+        Integer confId = conf.getId();
+
+        //If supported
+        if (getAudioSupported())
+            //Set RTP properties
+            client.SetRTPProperties(confId, id, MediaType.AUDIO, rtpMediaProperties.get("audio"));
+          
+        //If supported
+        if (getVideoSupported())
+            //Set RTP properties
+            client.SetRTPProperties(confId, id, MediaType.VIDEO, rtpMediaProperties.get("video"));
+
+        //If supported
+        if (getTextSupported())
+            //Set RTP properties
+            client.SetRTPProperties(confId, id, MediaType.TEXT, rtpMediaProperties.get("text"));
     }
 }
