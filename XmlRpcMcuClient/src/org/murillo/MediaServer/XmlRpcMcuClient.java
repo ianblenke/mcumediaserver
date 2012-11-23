@@ -337,6 +337,16 @@ public class XmlRpcMcuClient {
         return true;
     }
 
+    public boolean SetRTPProperties(Integer confId,Integer partId,MediaType media, HashMap<String,String> properties) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,partId,media.valueOf(),properties};
+        //Execute
+        HashMap response = (HashMap) client.execute("SetRTPProperties", request);
+        //Return
+        return true;
+    }
+
     public boolean StartSending(Integer confId,Integer partId,MediaType media,String sendIp,Integer sendPort,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
     {
         //Create request
