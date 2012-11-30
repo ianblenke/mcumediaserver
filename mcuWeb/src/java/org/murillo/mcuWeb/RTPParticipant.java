@@ -109,9 +109,6 @@ public class RTPParticipant extends Participant {
     private HashMap<String,ICEInfo> remoteICEInfo;
     private HashMap<String,HashMap<String,String>> rtpMediaProperties;
 
-
-    
-
     private static class CryptoInfo
     {
         String suite;
@@ -1668,18 +1665,6 @@ public class RTPParticipant extends Participant {
         {
             //Set codec
             client.SetAudioCodec(confId, id, getAudioCodec());
-            //Get cryto info
-            CryptoInfo info = remoteCryptoInfo.get("audio");
-            //If present
-            if (info!=null)
-                //Set it
-               client.SetRemoteCryptoSDES(confId, id, MediaType.AUDIO, info.suite, info.key);
-            //Get ice info
-            ICEInfo ice = remoteICEInfo.get("audio");
-            //If present
-            if (ice!=null)
-                //Set it
-               client.SetRemoteSTUNCredentials(confId, id, MediaType.AUDIO, ice.ufrag, ice.pwd);
             //Send
             client.StartSending(confId, id, MediaType.AUDIO, getSendAudioIp(), getSendAudioPort(), getRtpOutMediaMap("audio"));
             //Sending Audio
@@ -1697,18 +1682,6 @@ public class RTPParticipant extends Participant {
                     bitrate = videoBitrate;
             //Set codec
             client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize() , profile.getVideoFPS(), bitrate,0, 0, profile.getIntraPeriod());
-            //Get cryto info
-            CryptoInfo info = remoteCryptoInfo.get("video");
-            //If present
-            if (info!=null)
-                //Set it
-               client.SetRemoteCryptoSDES(confId, id, MediaType.VIDEO, info.suite, info.key);
-                        //Get ice info
-            ICEInfo ice = remoteICEInfo.get("video");
-            //If present
-            if (ice!=null)
-                //Set it
-               client.SetRemoteSTUNCredentials(confId, id, MediaType.VIDEO, ice.ufrag, ice.pwd);
             //Send
             client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
             //Sending Video
@@ -1720,18 +1693,6 @@ public class RTPParticipant extends Participant {
         {
             //Set codec
             client.SetTextCodec(confId, id, getTextCodec());
-            //Get cryto info
-            CryptoInfo info = remoteCryptoInfo.get("text");
-            //If present
-            if (info!=null)
-                //Set it
-               client.SetRemoteCryptoSDES(confId, id, MediaType.TEXT, info.suite, info.key);
-            //Get ice info
-            ICEInfo ice = remoteICEInfo.get("text");
-            //If present
-            if (ice!=null)
-                //Set it
-               client.SetRemoteSTUNCredentials(confId, id, MediaType.TEXT, ice.ufrag, ice.pwd);
             //Send
             client.StartSending(confId, id, MediaType.TEXT, getSendTextIp(), getSendTextPort(), getRtpOutMediaMap("text"));
             //Sending Text
@@ -1874,17 +1835,59 @@ public class RTPParticipant extends Participant {
 
         //If supported
         if (getAudioSupported())
+        {
+            //Get cryto info
+            CryptoInfo info = remoteCryptoInfo.get("audio");
+            //If present
+            if (info!=null)
+                //Set it
+               client.SetRemoteCryptoSDES(confId, id, MediaType.AUDIO, info.suite, info.key);
+            //Get ice info
+            ICEInfo ice = remoteICEInfo.get("audio");
+            //If present
+            if (ice!=null)
+                //Set it
+               client.SetRemoteSTUNCredentials(confId, id, MediaType.AUDIO, ice.ufrag, ice.pwd);
             //Set RTP properties
             client.SetRTPProperties(confId, id, MediaType.AUDIO, rtpMediaProperties.get("audio"));
-          
+        }
+
         //If supported
         if (getVideoSupported())
+        {
+            //Get cryto info
+            CryptoInfo info = remoteCryptoInfo.get("video");
+            //If present
+            if (info!=null)
+                //Set it
+               client.SetRemoteCryptoSDES(confId, id, MediaType.VIDEO, info.suite, info.key);
+                        //Get ice info
+            ICEInfo ice = remoteICEInfo.get("video");
+            //If present
+            if (ice!=null)
+                //Set it
+               client.SetRemoteSTUNCredentials(confId, id, MediaType.VIDEO, ice.ufrag, ice.pwd);
             //Set RTP properties
             client.SetRTPProperties(confId, id, MediaType.VIDEO, rtpMediaProperties.get("video"));
+        }
 
         //If supported
         if (getTextSupported())
+        {
+            //Get cryto info
+            CryptoInfo info = remoteCryptoInfo.get("text");
+            //If present
+            if (info!=null)
+                //Set it
+               client.SetRemoteCryptoSDES(confId, id, MediaType.TEXT, info.suite, info.key);
+            //Get ice info
+            ICEInfo ice = remoteICEInfo.get("text");
+            //If present
+            if (ice!=null)
+                //Set it
+               client.SetRemoteSTUNCredentials(confId, id, MediaType.TEXT, ice.ufrag, ice.pwd);
             //Set RTP properties
             client.SetRTPProperties(confId, id, MediaType.TEXT, rtpMediaProperties.get("text"));
+        }
     }
 }
