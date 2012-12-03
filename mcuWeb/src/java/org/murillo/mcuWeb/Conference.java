@@ -84,7 +84,7 @@ public class Conference implements Participant.Listener {
         //Generate a uuid
         UID = UUID.randomUUID().toString();
         //Create conference
-        this.id = client.CreateConference(UID,true,-1);
+        this.id = client.CreateConference(UID,XmlRpcMcuClient.VADBASIC,-1);
         //Get timestamp
         this.timestamp = new Date();
         //Save values
@@ -128,6 +128,10 @@ public class Conference implements Participant.Listener {
         participants = new HashMap<Integer,Participant>();
         //Set composition type
         client.SetCompositionType(id,XmlRpcMcuClient.DefaultMosaic,compType, size);
+        //If it is a 1P type set fist slot for VAD
+        if (compType==XmlRpcMcuClient.MOSAIC1p7 ||    compType==XmlRpcMcuClient.MOSAIC1p5 || compType==XmlRpcMcuClient.MOSAIC1p1)
+            //Vad controlled
+            setMosaicSlot(0,XmlRpcMcuClient.SLOTVAD);
         //Start broadcast
         client.StartBroadcaster(id);
         //By default add to default mosaic
@@ -287,7 +291,7 @@ public class Conference implements Participant.Listener {
         this.profile = profile;
     }
 
-    public void setMosaicSlot(Integer num, Integer partId) {
+    public final void setMosaicSlot(Integer num, Integer partId) {
         //Set mosaic slot for default mosaic
         setMosaicSlot(XmlRpcMcuClient.DefaultMosaic, num, partId);
     }
