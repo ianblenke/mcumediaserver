@@ -70,7 +70,15 @@ public class XmlRpcMcuClient {
 
     public static final Integer RTP = 0;
     public static final Integer RTMP = 1;
-    
+
+    public static final Integer VADNONE = 0;
+    public static final Integer VADBASIC = 1;
+    public static final Integer VADFULL = 2;
+
+    public static final Integer SLOTFREE = 0;
+    public static final Integer SLOTLOCK = -1;
+    public static final Integer SLOTVAD = -2;
+
     public static final int getMosaicNumSlots(Integer type) 
     {
         switch(type) 
@@ -140,10 +148,10 @@ public class XmlRpcMcuClient {
         return conferences;
     }
 
-    public Integer CreateConference(String tag,Boolean vad,Integer queueId) throws XmlRpcException
+    public Integer CreateConference(String tag,Integer vad,Integer queueId) throws XmlRpcException
     {
         //Create request
-        Object[] request = new Object[]{tag,vad?1:0,queueId};
+        Object[] request = new Object[]{tag,vad,queueId};
         //Execute 
         HashMap response = (HashMap) client.execute("CreateConference", request);
         //Get result
