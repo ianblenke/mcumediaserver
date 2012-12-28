@@ -47,13 +47,22 @@ public class XmlRpcMcuClient {
         public String name;
         public Integer numPart;
     }
-    public static final Integer QCIF = 0;
-    public static final Integer CIF  = 1;
-    public static final Integer VGA  = 2;
-    public static final Integer PAL  = 3;
-    public static final Integer HVGA  = 4;
-    public static final Integer QVGA = 5;
-    public static final Integer HD720P = 6;
+    
+    public static final Integer QCIF    = 0;
+    public static final Integer CIF     = 1;
+    public static final Integer VGA     = 2;
+    public static final Integer PAL     = 3;
+    public static final Integer HVGA    = 4;
+    public static final Integer QVGA    = 5;
+    public static final Integer HD720P  = 6;
+    public static final Integer WQVGA	= 7;	// 400  x 240
+    public static final Integer w448P   = 8;	// 768  x 448
+    public static final Integer sd448P  = 9;	// 576  x 448
+    public static final Integer w288P   = 10;	// 512  x 288
+    public static final Integer w576    = 11;	// 1024 x 576
+    public static final Integer FOURCIF = 12;	// 704  x 576
+    public static final Integer FOURSIF = 13;	// 704  x 576
+    public static final Integer XGA     = 14;	// 1024 x 768
     
     public static final Integer MOSAIC1x1   = 0;
     public static final Integer MOSAIC2x2   = 1;
