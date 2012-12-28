@@ -149,6 +149,14 @@ public class MediaMixer implements Serializable {
         sizes.put(XmlRpcMcuClient.HVGA,"HVGA");
         sizes.put(XmlRpcMcuClient.QVGA,"QVGA");
         sizes.put(XmlRpcMcuClient.HD720P,"HD720P");
+        sizes.put(XmlRpcMcuClient.WQVGA,"WQVGA");
+        sizes.put(XmlRpcMcuClient.w448P,"w448P");
+        sizes.put(XmlRpcMcuClient.sd448P,"448P");
+        sizes.put(XmlRpcMcuClient.w288P,"w288P");
+        sizes.put(XmlRpcMcuClient.w576,"w576");
+        sizes.put(XmlRpcMcuClient.FOURCIF,"4CIF");
+        sizes.put(XmlRpcMcuClient.FOURSIF,"4SIF");
+        sizes.put(XmlRpcMcuClient.XGA,"XGA");
         //Return map
         return sizes;
     }
