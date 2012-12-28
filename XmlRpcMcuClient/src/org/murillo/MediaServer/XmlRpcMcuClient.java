@@ -64,6 +64,7 @@ public class XmlRpcMcuClient {
     public static final Integer MOSAIC1p1   = 6;
     public static final Integer MOSAICPIP1  = 7;
     public static final Integer MOSAICPIP3  = 8;
+    public static final Integer MOSAIC4x4   = 9;
 
     public static final Integer DefaultMosaic = 0;
     public static final Integer DefaultSidebar = 0;
@@ -101,6 +102,10 @@ public class XmlRpcMcuClient {
                 return 2;
             case 8:
                 return 4;
+            case 9:
+                return 16;
+            case 10:
+                return 20;
         }
         
         return -1;
