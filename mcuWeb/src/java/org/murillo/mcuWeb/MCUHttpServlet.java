@@ -108,17 +108,18 @@ public class MCUHttpServlet extends HttpServlet {
             //Depending on the method
             if (method.equals("createConference")) {
                 //Get parameters
-                String name      = request.getParameter("name");
-                String did       = request.getParameter("did");
-                String mixerId   = request.getParameter("mixerId");
-                String profileId = request.getParameter("profileId");
-                Integer compType = Integer.parseInt(request.getParameter("compType"));
-                Integer size = Integer.parseInt(request.getParameter("size"));
-                String audioCodecs = request.getParameter("audioCodecs");
-                String videoCodecs = request.getParameter("videoCodecs");
-                String textCodecs = request.getParameter("textCodecs");
+                String name         = request.getParameter("name");
+                String did          = request.getParameter("did");
+                String mixerId      = request.getParameter("mixerId");
+                String profileId    = request.getParameter("profileId");
+                Integer compType    = Integer.parseInt(request.getParameter("compType"));
+                Integer vad         = Integer.parseInt(request.getParameter("vad"));
+                Integer size        = Integer.parseInt(request.getParameter("size"));
+                String audioCodecs  = request.getParameter("audioCodecs");
+                String videoCodecs  = request.getParameter("videoCodecs");
+                String textCodecs   = request.getParameter("textCodecs");
                 //Call
-                Conference conf = confMngr.createConference(name,did,mixerId,size,compType,profileId,audioCodecs,videoCodecs,textCodecs);
+                Conference conf = confMngr.createConference(name,did,mixerId,size,compType,vad,profileId,audioCodecs,videoCodecs,textCodecs);
                 //Redirect
                 response.sendRedirect(path+"/conference.jsp?uid=" + conf.getUID());
             } else if (method.equals("removeConference")) {
@@ -230,18 +231,19 @@ public class MCUHttpServlet extends HttpServlet {
                 response.sendRedirect(path);
               } else if (method.equals("addConferenceAdHocTemplate")) {
                 //Get parameters
-                String name      = request.getParameter("name");
-                String did       = request.getParameter("did");
-                String mixerId   = request.getParameter("mixerId");
-                String profileId = request.getParameter("profileId");
-                Integer compType = Integer.parseInt(request.getParameter("compType"));
-                Integer size = Integer.parseInt(request.getParameter("size"));
+                String name         = request.getParameter("name");
+                String did          = request.getParameter("did");
+                String mixerId      = request.getParameter("mixerId");
+                String profileId    = request.getParameter("profileId");
+                Integer compType    = Integer.parseInt(request.getParameter("compType"));
+                Integer vad         = Integer.parseInt(request.getParameter("vad"));
+                Integer size        = Integer.parseInt(request.getParameter("size"));
                 //Get codecs
                 String audioCodecs = request.getParameter("audioCodecs");
                 String videoCodecs = request.getParameter("videoCodecs");
                 String textCodecs = request.getParameter("textCodecs");
                 //Call
-                confMngr.addConferenceAdHocTemplate(name,did,mixerId,size,compType,profileId,audioCodecs,videoCodecs,textCodecs);
+                confMngr.addConferenceAdHocTemplate(name,did,mixerId,size,compType,vad,profileId,audioCodecs,videoCodecs,textCodecs);
                 //Redirect
                 response.sendRedirect(path);
             } else if (method.equals("removeConferenceAdHocTemplate")) {
@@ -294,12 +296,12 @@ public class MCUHttpServlet extends HttpServlet {
             }
         } catch (ConferenceNotFoundExcetpion cex) {
             //Log
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, "failed to run" + method, cex);
+            Logger.getLogger(MCUHttpServlet.class.getName()).log(Level.SEVERE, "failed to run" + method, cex);
             //Redirect home
             response.sendRedirect(path);
         } catch (ParticipantNotFoundException pex) {
             //Log
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, "failed to run" + method, pex);
+            Logger.getLogger(MCUHttpServlet.class.getName()).log(Level.SEVERE, "failed to run" + method, pex);
             //Redirect home
             response.sendRedirect(path);
         }

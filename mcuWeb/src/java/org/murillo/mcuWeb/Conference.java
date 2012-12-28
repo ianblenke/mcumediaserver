@@ -64,12 +64,13 @@ public class Conference implements Participant.Listener {
     protected MediaMixer mixer;
     protected HashMap<Integer,Participant> participants;
     protected int numActParticipants;
+    protected Integer vad;
     protected Integer compType;
     protected Integer size;
     protected Integer numSlots;
     protected Integer slots[];
-    protected Profile profile;
     protected Boolean isAdHoc;
+    protected Profile profile;
     protected SipFactory sf;
     protected boolean addToDefaultMosaic;
     protected boolean isDestroying;
@@ -78,13 +79,13 @@ public class Conference implements Participant.Listener {
     protected HashMap<String,List<Integer>> supportedCodecs = null;
 
     /** Creates a new instance of Conference */
-    public Conference(SipFactory sf,String name,String did,MediaMixer mixer,Integer size,Integer compType,Profile profile,Boolean isAdHoc) throws XmlRpcException {
+    public Conference(SipFactory sf,String name,String did,MediaMixer mixer,Integer size,Integer compType,Integer vad, Profile profile,Boolean isAdHoc) throws XmlRpcException {
         //Create the client
         this.client = mixer.createMcuClient();
         //Generate a uuid
         UID = UUID.randomUUID().toString();
         //Create conference
-        this.id = client.CreateConference(UID,XmlRpcMcuClient.VADBASIC,-1);
+        this.id = client.CreateConference(UID,vad,-1);
         //Get timestamp
         this.timestamp = new Date();
         //Save values
@@ -93,6 +94,7 @@ public class Conference implements Participant.Listener {
         this.did = did;
         this.profile = profile;
         this.isAdHoc = isAdHoc;
+        this.vad = vad;
         //Create listeners
         listeners = new HashSet<Listener>();
         //Default composition and size
@@ -129,7 +131,7 @@ public class Conference implements Participant.Listener {
         //Set composition type
         client.SetCompositionType(id,XmlRpcMcuClient.DefaultMosaic,compType, size);
         //If it is a 1P type set fist slot for VAD
-        if (compType==XmlRpcMcuClient.MOSAIC1p7 ||    compType==XmlRpcMcuClient.MOSAIC1p5 || compType==XmlRpcMcuClient.MOSAIC1p1)
+        if (vad!=XmlRpcMcuClient.VADNONE && (compType==XmlRpcMcuClient.MOSAIC1p7 || compType==XmlRpcMcuClient.MOSAIC1p5))
             //Vad controlled
             setMosaicSlot(0,XmlRpcMcuClient.SLOTVAD);
         //Start broadcast
@@ -202,6 +204,10 @@ public class Conference implements Participant.Listener {
 
     public void setAutoAccept(boolean autoAccept) {
         this.autoAccept = autoAccept;
+    }
+
+    public Integer getVADMode() {
+        return vad;
     }
 
     private void setCompType(Integer compType) {
@@ -291,7 +297,7 @@ public class Conference implements Participant.Listener {
         this.profile = profile;
     }
 
-    public final void setMosaicSlot(Integer num, Integer partId) {
+    public void setMosaicSlot(Integer num, Integer partId) {
         //Set mosaic slot for default mosaic
         setMosaicSlot(XmlRpcMcuClient.DefaultMosaic, num, partId);
     }

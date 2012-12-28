@@ -177,6 +177,16 @@ public class MediaMixer implements Serializable {
         return codecs;
     } 
     
+    public static HashMap<Integer,String> getVADModes() {
+        //The map
+        HashMap<Integer,String> modes = new HashMap<Integer,String>();
+        //Add values
+        modes.put(XmlRpcMcuClient.VADNONE,"None");
+        modes.put(XmlRpcMcuClient.VADFULL,"Full");
+        //Return map
+        return modes;
+    }
+
     public static HashMap<Integer,String> getTextCodecs() {
         //The map
         HashMap<Integer,String> codecs = new HashMap<Integer,String>();
@@ -200,6 +210,7 @@ public class MediaMixer implements Serializable {
         mosaics.put(XmlRpcMcuClient.MOSAIC1p1 ,"MOSAIC1+1");
         mosaics.put(XmlRpcMcuClient.MOSAICPIP1,"MOSAICPIP1");
         mosaics.put(XmlRpcMcuClient.MOSAICPIP3,"MOSAICPIP3");
+        mosaics.put(XmlRpcMcuClient.MOSAIC4x4 ,"MOSAIC4x4");
         //Return map
         return mosaics;
     }

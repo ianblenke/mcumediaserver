@@ -1,10 +1,14 @@
 <%@page contentType="text/html"%>
-<%@page pageEncoding="ISO-8859-1"%>
-<%@page import="java.util.Iterator"%> 
-<%@page import="org.murillo.mcuWeb.ConferenceMngr"%>
+<%@page pageEncoding="UTF-8"%>
+<%@page import="java.util.HashMap"%>
+<%@page import="java.util.Map.Entry"%>
+<%@page import="org.murillo.mcuWeb.Profile"%>
 <%@page import="org.murillo.mcuWeb.Participant"%>
 <%@page import="org.murillo.mcuWeb.Conference"%>
+<%@page import="org.murillo.mcuWeb.ConferenceMngr"%>
+<%@page import="org.murillo.mcuWeb.MediaMixer"%>
 <%@page import="org.murillo.mcuWeb.exceptions.ConferenceNotFoundExcetpion"%>
+<%@page import="org.murillo.MediaServer.XmlRpcMcuClient"%>
 <%
     Conference conf;
     //Get conference manager
@@ -21,8 +25,10 @@
 	//Exit
 	return;
     }
-    //Get participant iterator
-   Iterator<Participant> itPart = null;
+    //Get mosaics types
+    HashMap<Integer,String> types = MediaMixer.getMosaics();
+    //Get sizes
+    HashMap<Integer,String> sizes = MediaMixer.getSizes();
 %>
 <script>
     var uid = "<%=uid%>";
@@ -70,15 +76,14 @@
                 <td><select name="pos" onchange="setMosaicSlot(<%=i%>,this.value);">
                         <option value="0"  <%=slots[i].equals(0)?"selected":""%>>Free
                         <option value="-1" <%=slots[i].equals(-1)?"selected":""%>>Lock
-			<option value="-2" <%=slots[i].equals(-1)?"selected":""%>>VAD
 		<%
-                    //Get iterator
-                    itPart = conf.getParticipants().values().iterator();
-                    //Loop 
-                    while(itPart.hasNext()) 
+		    if (conf.getVADMode()!=XmlRpcMcuClient.VADNONE)
                     {
-                        // Get mixer
-                        Participant part = itPart.next();
+			    %><option value="-2" <%=slots[i].equals(-2)?"selected":""%>>VAD<%
+		    }
+                    //iterate
+		    for (Participant part : conf.getParticipants().values())
+                    {
                         //Print it
                         %><option value="<%=part.getId()%>" <%=slots[i].equals(part.getId())?"selected":""%>><%=part.getName()%><%
                     }
@@ -110,20 +115,18 @@
                 <td>Mixer:</td>
                 <td><%=conf.getMixer().getName()%></td>
             </tr>
+	   <tr>
+                <td>VAD mode</td>
+                <td><%=MediaMixer.getVADModes().get(conf.getVADMode())%></td>
+		<td></td>
+            </tr>
             <tr>
                 <td>Composition:</td>
                 <td><select name="compType" value="<%=conf.getCompType()%>">
                     <%
-                        //Get mosaics
-                        java.util.HashMap<Integer,String> mosaics = org.murillo.mcuWeb.MediaMixer.getMosaics();
-                        //Get iterator
-                        Iterator<java.lang.Integer> itMosaics = mosaics.keySet().iterator();
-                        //Loop 
-                        while(itMosaics.hasNext()) {
-                            //Get key and value
-                            Integer k = itMosaics.next();
-                            String v = mosaics.get(k);
-                            %><option value="<%=k%>" <%=conf.getCompType()==k?"selected":""%> ><%=v%><%
+                        for(Entry<Integer,String> entry : types.entrySet())
+			{
+                            %><option value="<%=entry.getKey()%>" <%=conf.getCompType()==entry.getKey()?"selected":""%> ><%=entry.getValue()%><%
                         }
                     %>
                     </select>
@@ -131,36 +134,23 @@
             </tr>
             <tr>
                 <td>Size</td>
-                <td><select name="size" value="<%=conf.getSize()%>">
-                <%
-                        //Get sizes
-                        java.util.HashMap<Integer,String> sizes = org.murillo.mcuWeb.MediaMixer.getSizes();
-                        //Get iterator
-                        Iterator<java.lang.Integer> itSizes = sizes.keySet().iterator();
-                        //Loop 
-                        while(itSizes.hasNext()) {
-                            //Get key and value
-                            Integer k = itSizes.next();
-                            String v = sizes.get(k);
-                            %><option value="<%=k%>" <%=conf.getSize()==k?"selected":""%> ><%=v%><%
-                        }
-                    %>
-                    </select>
+                <td><select name="size"><%
+		for (Entry<Integer,String> entry: sizes.entrySet())
+		{
+			%><option value="<%=entry.getKey()%>" <%=conf.getSize()==entry.getKey()?"selected":""%>><%=entry.getValue()%><%
+		}
+	%></select></td>
                 </td>
             </tr>
             <tr>
                 <td>Default profile:</td>
-                <td><select name="profileId">
-                     <%
-                        //Get profiles
-                        Iterator<org.murillo.mcuWeb.Profile> itProf = confMngr.getProfiles().values().iterator();
-                        //Loop 
-                        while(itProf.hasNext()) {
-                            // Get mixer
-                            org.murillo.mcuWeb.Profile profile = itProf.next();
+                <td><select name="profileId"><%
+                         //Loop
+                       for (Profile profile : confMngr.getProfiles().values())
+		       {
                             //If it's the selected profile
                             %><option value="<%=profile.getUID()%>" <%=profile.getUID().equals(conf.getProfile().getUID())?"selected":""%>><%=profile.getName()%><%
-                        }
+                       }
                     %>
 		    </select>
                 </td>
@@ -200,23 +190,14 @@
             <th>Actions</th>
         </tr>
         <%
-        //Reset iterator
-        itPart = conf.getParticipants().values().iterator();
-        //Loop 
-        while(itPart.hasNext()) {
-            // Get participant
-           Participant part = itPart.next();
-            //Print values
+        for (Participant part : conf.getParticipants().values())
+	{
             %>
         <tr>
-            <td><%=part.getName()%></td>
+            <td width="30%"><%=part.getName()%></td>
 	    <td><select name="profileId" onChange="changeParticipantProfile('<%=part.getId()%>',this.value)"><%
-                        //Get profiles
-                        itProf = confMngr.getProfiles().values().iterator();
-                        //Loop
-                        while(itProf.hasNext()) {
-                            // Get mixer
-                            org.murillo.mcuWeb.Profile profile = itProf.next();
+                       for (Profile profile : confMngr.getProfiles().values())
+		       {
                             //If it's the selected profile
                             %><option value="<%=profile.getUID()%>" <%=profile.getUID().equals(part.getVideoProfile().getUID())?"selected":""%>><%=profile.getName()%><%
                         }

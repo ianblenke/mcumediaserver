@@ -169,6 +169,16 @@ public class ConferenceMngr implements Conference.Listener {
                     if (!mixers.containsKey(mixerUID) || !profiles.containsKey(profileUID))
                         //Skip this
                         continue;
+                    //Initially not vad
+                    Integer vad = XmlRpcMcuClient.VADNONE;
+                    //Get vad node
+                    try
+                    {
+                        //Try to parse it as integer
+                        vad = Integer.parseInt(attrs.getNamedItem("vad").getNodeValue());
+                    } catch (Exception ex ) {
+
+                    }
                     //Create template
                     ConferenceTemplate template = new ConferenceTemplate(
                         attrs.getNamedItem("name").getNodeValue(),
@@ -176,6 +186,7 @@ public class ConferenceMngr implements Conference.Listener {
                         mixers.get(mixerUID),
                         Integer.parseInt(attrs.getNamedItem("size").getNodeValue()),
                         Integer.parseInt(attrs.getNamedItem("compType").getNodeValue()),
+                        vad,
                         profiles.get(profileUID),
                         attrs.getNamedItem("audioCodecs").getNodeValue(),
                         attrs.getNamedItem("videoCodecs").getNodeValue(),
@@ -229,7 +240,6 @@ public class ConferenceMngr implements Conference.Listener {
             //Serrialize to file
             Transformer transformer = TransformerFactory.newInstance().newTransformer();
             transformer.transform(new DOMSource(doc),  new StreamResult(new File(confDir+"mixers.xml")));
-
         } catch (TransformerException ex) {
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
         } catch (ParserConfigurationException ex) {
@@ -259,6 +269,7 @@ public class ConferenceMngr implements Conference.Listener {
                 child.setAttribute("did"        ,template.getDID());
                 child.setAttribute("size"       ,template.getSize().toString());
                 child.setAttribute("compType"   ,template.getCompType().toString());
+                child.setAttribute("vad"            ,template.getVADMode().toString());
                 child.setAttribute("mixer"      ,template.getMixer().getUID());
                 child.setAttribute("profile"    ,template.getProfile().getUID());
                 //Set codecs
@@ -317,7 +328,7 @@ public class ConferenceMngr implements Conference.Listener {
         }
     }
 
-    public Conference createConference(String name,String did, String mixerId,Integer size,Integer compType,String profileId,String audioCodecs,String videoCodecs,String textCodecs) {
+    public Conference createConference(String name,String did, String mixerId,Integer size,Integer compType,int vad,String profileId,String audioCodecs,String videoCodecs,String textCodecs) {
         Conference conf = null;
         //Lock conferences
         synchronized (conferences)
@@ -353,7 +364,7 @@ public class ConferenceMngr implements Conference.Listener {
 
         try {
             //Create conference object
-            conf = new Conference(sf, name, did, mixer, size, compType, profile, false);
+            conf = new Conference(sf, name, did, mixer, size, compType, vad, profile, false);
             //If got audio codecs
             if (audioCodecs!=null && !audioCodecs.isEmpty())
             {
@@ -439,7 +450,7 @@ public class ConferenceMngr implements Conference.Listener {
 
         try {
             //Create conference object
-            conf = new Conference(sf, template.getName(), did, mixer, template.getSize(), template.getCompType(), template.getProfile(), true);
+            conf = new Conference(sf, template.getName(), did, mixer, template.getSize(), template.getCompType(), template.getVADMode(), template.getProfile(), true);
             //Add listener
             conf.addListener(this);
             //If got audio codecs
@@ -730,13 +741,29 @@ public class ConferenceMngr implements Conference.Listener {
         }
     }
 
-    public void addConferenceAdHocTemplate(String name, String did, String mixerId, Integer size, Integer compType, String profileId,String audioCodecs,String videoCodecs,String textCodecs) {
+    public boolean addConferenceAdHocTemplate(String name, String did, String mixerId, Integer size, Integer compType, Integer vad, String profileId,String audioCodecs,String videoCodecs,String textCodecs) {
         //Get the mixer
         MediaMixer mixer = mixers.get(mixerId);
+        //Check mixer
+        if (mixer==null)
+        {
+            //Log
+            Logger.getLogger(ConferenceMngr.class.getName()).log(Level.WARNING, "Could not add conference ad hoc template, mixer with id={1} not found", mixerId);
+            //Error
+            return false;
+        }
         //Get profile
         Profile profile = profiles.get(profileId);
+        //Check profile
+        if (profile==null)
+        {
+            //Log
+            Logger.getLogger(ConferenceMngr.class.getName()).log(Level.WARNING, "Could not add conference ad hoc template, profile with id={1} not found", profileId);
+            //Error
+            return false;
+        }
         //Create the template
-        ConferenceTemplate template = new ConferenceTemplate(name,did,mixer,size,compType,profile,audioCodecs,videoCodecs,textCodecs);
+        ConferenceTemplate template = new ConferenceTemplate(name,did,mixer,size,compType,vad,profile,audioCodecs,videoCodecs,textCodecs);
 
         synchronized(templates) {
             //Add it to the templates
@@ -744,6 +771,7 @@ public class ConferenceMngr implements Conference.Listener {
             //Save configuration
             saveTemplatesConfiguration();
         }
+        return true;
     }
 
     void removeConferenceAdHocTemplate(String uid) {

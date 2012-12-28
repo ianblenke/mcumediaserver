@@ -1,8 +1,9 @@
 <%@page contentType="text/html"%>
 <%@page pageEncoding="ISO-8859-1"%>
 <%@page import="java.util.Iterator"%>
+<%@page import="java.util.Map.Entry"%>
 <%@page import="java.util.HashMap"%>
-<%@page import="org.murillo.mcuWeb.ConferenceMngr"%>
+<%@page import="org.murillo.mcuWeb.*"%>
 <%
     //Get conference manager
     ConferenceMngr confMngr = (ConferenceMngr) getServletContext().getAttribute("confMngr");
@@ -24,11 +25,11 @@
                 <td><select name="mixerId">
                     <%
                         //Get mixers
-                        Iterator<org.murillo.mcuWeb.MediaMixer> it = confMngr.getMediaMixers().values().iterator();
+                        Iterator<MediaMixer> it = confMngr.getMediaMixers().values().iterator();
                         //Loop
                         while(it.hasNext()) {
                             // Get mixer
-                            org.murillo.mcuWeb.MediaMixer mixer = it.next();
+                            MediaMixer mixer = it.next();
                             %><option value="<%=mixer.getUID()%>"><%=mixer.getName()%><%
                         }
                     %>
@@ -38,37 +39,31 @@
                 <td>Composition:</td>
                 <td><select name="compType">
                      <%
-                        //Get mosaics
-                        java.util.HashMap<Integer,String> mosaics = org.murillo.mcuWeb.MediaMixer.getMosaics();
-                        //Get iterator
-                        Iterator<java.lang.Integer> itMosaics = mosaics.keySet().iterator();
-                        //Loop
-                        while(itMosaics.hasNext()) {
-                            //Get key and value
-                            Integer k = itMosaics.next();
-                            String v = mosaics.get(k);
-                            %><option value="<%=k%>"><%=v%><%
+			for (Entry<Integer,String> entry : MediaMixer.getMosaics().entrySet())
+			{
+			    %><option value="<%=entry.getKey()%>"><%=entry.getValue()%><%
                         }
                     %></select>
                 </td>
             </tr>
             <tr>
+                <td>VAD:</td>
+                <td><select name="vad"><%
+			for (Entry<Integer,String> entry : MediaMixer.getVADModes().entrySet())
+			{
+			    %><option value="<%=entry.getKey()%>"><%=entry.getValue()%><%
+			}
+		    %></select>
+                </td>
+            </tr>
+            <tr>
                 <td>Mosaic size:</td>
-                <td><select name="size">
-                    <%
-                        //Get sizes
-                        java.util.HashMap<Integer,String> sizes = org.murillo.mcuWeb.MediaMixer.getSizes();
-                        //Get iterator
-                        Iterator<java.lang.Integer> itSizes = sizes.keySet().iterator();
-                        //Loop
-                        while(itSizes.hasNext()) {
-                            //Get key and value
-                            Integer k = itSizes.next();
-                            String v = sizes.get(k);
-                            %><option value="<%=k%>"><%=v%><%
+                <td><select name="size"><%
+			for (Entry<Integer,String> entry : MediaMixer.getSizes().entrySet())
+			{
+			    %><option value="<%=entry.getKey()%>"><%=entry.getValue()%><%
                         }
-                    %>
-                    </select>
+		    %></select>
                 </td>
             </tr>
              <tr>
@@ -76,11 +71,11 @@
                 <td><select name="profileId">
                      <%
                         //Get profiles
-                        Iterator<org.murillo.mcuWeb.Profile> itProf = confMngr.getProfiles().values().iterator();
+                        Iterator<Profile> itProf = confMngr.getProfiles().values().iterator();
                         //Loop
                         while(itProf.hasNext()) {
                             // Get mixer
-                            org.murillo.mcuWeb.Profile profile = itProf.next();
+                            Profile profile = itProf.next();
                             %><option value="<%=profile.getUID()%>"><%=profile.getName()%><%
                         }
                     %></select>

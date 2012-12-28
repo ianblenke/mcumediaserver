@@ -42,7 +42,6 @@
 
     function onControllerAsyncLoaded()
     {
-        alert("done");
     }
 
     function callControllerAsync(method,param)

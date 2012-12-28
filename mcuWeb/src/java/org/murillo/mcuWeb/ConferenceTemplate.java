@@ -5,6 +5,8 @@
 
 package org.murillo.mcuWeb;
 
+import java.util.HashMap;
+
 /**
  *
  * @author Sergio
@@ -22,8 +24,10 @@ public class ConferenceTemplate {
     private String audioCodecs;
     private String videoCodecs;
     private String textCodecs;
+    private Integer vad;
+    private HashMap<String,String> properties;
 
-    ConferenceTemplate(String name, String did, MediaMixer mixer, Integer size, Integer compType, Profile profile, String audioCodecs,String videoCodecs,String textCodecs) {
+    ConferenceTemplate(String name, String did, MediaMixer mixer, Integer size, Integer compType, Integer vad, Profile profile, String audioCodecs,String videoCodecs,String textCodecs) {
        //Set values
         this.uid = did;
         this.name = name;
@@ -32,9 +36,12 @@ public class ConferenceTemplate {
         this.size = size;
         this.compType = compType;
         this.profile = profile;
+        this.vad = vad;
         this.audioCodecs = audioCodecs;
         this.videoCodecs = videoCodecs;
         this.textCodecs = textCodecs;
+        //Create property map
+        this.properties = new HashMap<String, String>();
     }
 
     public String getUID() {
@@ -66,9 +73,13 @@ public class ConferenceTemplate {
     }
 
     public Boolean isDIDMatched(String did) {
-        //Check if we match any
-        if (this.did.equals("*"))
-            //We do
+        //Check did
+        if (did==null)
+            //not matched
+            return false;
+        //Check for default one
+        if (did.equals("*"))
+            //Matched
             return true;
         //Get length
         int len = did.length();
@@ -96,5 +107,22 @@ public class ConferenceTemplate {
 
     String getTextCodecs() {
         return textCodecs;
+    }
+
+    Integer getVADMode() {
+        return vad;
+}
+
+    public HashMap<String,String> getProperties() {
+        return properties;
+    }
+    public void addProperty(String key,String value) {
+        //Add property
+        properties.put(key, value);
+    }
+
+    public void addProperties(HashMap<String,String> props) {
+        //Add all
+        properties.putAll(props);
     }
 }
