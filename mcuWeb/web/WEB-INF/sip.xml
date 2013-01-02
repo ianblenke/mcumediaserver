@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sip-app>
+    <app-name>mcuWeb</app-name>
     <session-config>
         <session-timeout>0</session-timeout>
     </session-config>
