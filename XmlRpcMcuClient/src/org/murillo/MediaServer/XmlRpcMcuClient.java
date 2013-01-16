@@ -77,6 +77,7 @@ public class XmlRpcMcuClient {
 
     public static final Integer DefaultMosaic = 0;
     public static final Integer DefaultSidebar = 0;
+    public static final Integer AppMixerId = 1;
 
     public static final Integer RTP = 0;
     public static final Integer RTMP = 1;
@@ -529,6 +530,7 @@ public class XmlRpcMcuClient {
         //Return
         return true;
     }
+    
     public boolean StartPlaying(Integer confId,int playerId,String filename,int loop) throws XmlRpcException
     {
         //Create request
@@ -655,4 +657,4 @@ public class XmlRpcMcuClient {
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }
- }
+}
