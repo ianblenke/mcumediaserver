@@ -71,10 +71,13 @@ public class Codecs {
     public static final Integer SORENSON     = 100;
     public static final Integer VP8          = 107;
 
+    public static final Integer ULPFEC       = 108;
+    public static final Integer RED          = 109;
+
     public static final Integer T140RED      = 105;
     public static final Integer T140         = 106;
 
-    public static CodecInfo getCodecInfoForname(String name)
+    /*public static CodecInfo getCodecInfoForname(String name)
     {
          if (name.equalsIgnoreCase("PCMU"))         return new CodecInfo(MediaType.AUDIO,PCMU);
          if (name.equalsIgnoreCase("PCMA"))         return new CodecInfo(MediaType.AUDIO,PCMA);
@@ -96,7 +99,7 @@ public class Codecs {
          if (name.equalsIgnoreCase("RED"))         return new CodecInfo(MediaType.TEXT,T140RED);
          if (name.equalsIgnoreCase("T140"))        return new CodecInfo(MediaType.TEXT,T140);
          return null;
-    }
+    }*/
 
     public static Integer getCodecForName(String media,String name)
     {
@@ -122,6 +125,8 @@ public class Codecs {
             if (name.equalsIgnoreCase("H264"))        return H264;
             if (name.equalsIgnoreCase("SORENSON"))    return SORENSON;
             if (name.equalsIgnoreCase("VP8"))         return VP8;
+            if (name.equalsIgnoreCase("RED"))         return RED;
+            if (name.equalsIgnoreCase("ULPFEC"))      return ULPFEC;
         }
         else if (media.equals("text"))
         {
@@ -143,7 +148,7 @@ public class Codecs {
             if (codec==AMR_WB)     return "AMR-WB";
             if (codec==G726)       return "G726";
             if (codec==G722)       return "G722";
-            if (codec==NELLY11)      return "NELLY11";
+            if (codec==NELLY11)    return "NELLY11";
             if (codec==TELEFONE_EVENT)    return "telephone-event";
         }
         else if (media.equals("video"))
@@ -154,12 +159,14 @@ public class Codecs {
             if (codec==H264)       return "H264";
             if (codec==SORENSON)   return "SORENSON";
             if (codec==VP8)        return "VP8";
-         }
+            if (codec==RED)        return "red";
+            if (codec==ULPFEC)     return "ulpfec";
+        }
         else if (media.equals("text"))
         {
             if (codec==T140RED)    return "RED";
             if (codec==T140)       return "T140";
-         }
+        }
         return "";
     }
 
