@@ -49,8 +49,10 @@ public:
 		{
 			//Unlock
 			pthread_mutex_unlock(&mutex);
+			//Delete pacekt
+			delete(rtp);
 			//Skip it and lost forever
-			return Error("-Out of order non recoverable packeti [next:%d,seq:%d,maxWaitTime=%d,%d,%d]\n",seq,next,maxWaitTime,rtp->GetSeqCycles(),rtp->GetSeqNum());
+			return Error("-Out of order non recoverable packet [next:%d,seq:%d,maxWaitTime=%d,%d,%d]\n",next,seq,maxWaitTime,rtp->GetSeqCycles(),rtp->GetSeqNum());
 		}
 
 		//Add event
@@ -108,7 +110,7 @@ public:
 				QWORD time = candidate->GetTime();
 
 				//Check if first is the one expected or wait if not
-				if (next==(DWORD)-1 || seq==next || time+maxWaitTime<getTime())
+				if (next==(DWORD)-1 || seq==next || time+maxWaitTime<getTime()/1000)
 				{
 					//We have it!
 					rtp = candidate;
@@ -125,13 +127,14 @@ public:
 				//Calculate until when we have to sleep
 				ts.tv_sec  = (time+maxWaitTime) / 1e6;
 				ts.tv_nsec = (time+maxWaitTime) - ts.tv_sec*1e6;
-
+				
 				//Wait with time out
 				int ret = pthread_cond_timedwait(&cond,&mutex,&ts);
 				//Check if there is an errot different than timeout
 				if (ret && ret!=ETIMEDOUT)
 					//Print error
 					Error("-WaitQueue cond timedwait error [%d,%d]\n",ret,errno);
+				
 			} else {
 				//Wait until we have a new rtp pacekt
 				int ret = pthread_cond_wait(&cond,&mutex);

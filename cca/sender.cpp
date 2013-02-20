@@ -223,7 +223,7 @@ int main(int argc, char** argv)
 		if (strcmp(argv[i],"-h")==0 || strcmp(argv[i],"--help")==0)
 		{
 			//Show usage
-			printf("Usage: sender [-h] [-smooth] [--ip ip] [--port port] [--local-port port [--rate bps] [--rate-min bps] [--gop-size frames] [--fps fps] [--rtp-max-size size] [--IP-scale scale]\r\n\r\n"
+			printf("Usage: sender [-h] [--smooth] [--ip ip] [--port port] [--local-port port [--rate bps] [--rate-min bps] [--gop-size frames] [--fps fps] [--rtp-max-size size] [--IP-scale scale]\r\n\r\n"
 				"Options:\r\n"
 				" -h,--help        Print help\r\n"
 				" --ip             Destination IP\r\n"
@@ -238,7 +238,7 @@ int main(int argc, char** argv)
 				" --smooth         Smooth sending of rtp packets of a frame (Traffic shaping)\r\n");
 			//Exit
 			return 0;
-		} else if (strcmp(argv[i],"-smooth")==0) {
+		} else if (strcmp(argv[i],"--smooth")==0) {
 			//Nothing yet
 		} else if (strcmp(argv[i],"--ip")==0 && (i+1<argc)) {
 			//Get ip

@@ -130,11 +130,15 @@ public:
 	RTPPacket* Clone()
 	{
 		//New one
-		RTPPacket* cloned = new RTPPacket(media,codec,header->pt);
-		//Copy
-		memcpy(cloned->GetData(),buffer,SIZE);
-		//Set media length
-		cloned->SetMediaLength(len);
+		RTPPacket* cloned = new RTPPacket(GetMedia(),GetCodec(),GetType());
+		//Set attrributes
+		cloned->SetClockRate(GetClockRate());
+		cloned->SetMark(GetMark());
+		cloned->SetSeqNum(GetSeqNum());
+		cloned->SetSeqCycles(GetSeqCycles());
+		cloned->SetTimestamp(GetTimestamp());
+		//Set payload
+		cloned->SetPayload(GetMediaData(),GetMediaLength());
 		//Return it
 		return cloned;
 	}
@@ -143,11 +147,15 @@ public:
 	void SetMediaLength(DWORD len)	{ this->len = len;			}
 	void SetTimestamp(DWORD ts)	{ header->ts = htonl(ts);		}
 	void SetSeqNum(WORD sn)		{ header->seq = htons(sn);		}
+	void SetP(bool p)		{ header->p = p;			}
+	void SetX(bool x)		{ header->x = x;			}
+	void SetCC(BYTE cc)		{ header->cc = cc;			}
 	void SetMark(bool mark)		{ header->m = mark;			}
+	void SetSSRC(DWORD ssrc)	{ header->ssrc = htonl(ssrc);		}
 	void SetCodec(DWORD codec)	{ this->codec = codec;			}
 	void SetType(DWORD type)	{ header->pt = type;			}
 	void SetSize(DWORD size)	{ len = size-GetRTPHeaderLen();		}
-	void SetCycles(WORD cycles)	{ this->cycles = cycles;		}
+	void SetSeqCycles(WORD cycles)	{ this->cycles = cycles;		}
 	void SetClockRate(DWORD rate)	{ this->clockRate = rate;		}
 	
 	//Getters
@@ -155,6 +163,9 @@ public:
 	rtp_hdr_t* GetRTPHeader()	const { return (rtp_hdr_t*)buffer;		}
 	DWORD GetRTPHeaderLen()		const { return sizeof(rtp_hdr_t)+4*header->cc;	}
 	DWORD GetCodec()		const { return codec;				}
+	bool  GetX()			const { return header->x;			}
+	bool  GetP()			const { return header->p;			}
+	BYTE  GetCC()			const { return header->cc;			}
 	DWORD GetType()			const { return header->pt;			}
 	DWORD GetSize()			const { return len+GetRTPHeaderLen();		}
 	BYTE* GetData()			      { return buffer;				}
@@ -198,6 +209,9 @@ public:
 		//OK
 		return true;
 	}
+public:
+	static BYTE GetType(const BYTE* data)	{ return ((rtp_hdr_t*)data)->pt;		}
+	static DWORD GetSSRC(const BYTE* data)	{ return ntohl(((rtp_hdr_t*)data)->ssrc);	}
 private:
 	static const DWORD SIZE = 1700;
 private:
@@ -260,9 +274,77 @@ public:
 		time = ::getTime();
 	}
 
-	QWORD GetTime() { return time; }
+	RTPTimedPacket* Clone()
+	{
+		//New one
+		RTPTimedPacket* cloned = new RTPTimedPacket(GetMedia(),GetCodec(),GetType());
+		//Set attrributes
+		cloned->SetClockRate(GetClockRate());
+		cloned->SetMark(GetMark());
+		cloned->SetSeqNum(GetSeqNum());
+		cloned->SetSeqCycles(GetSeqCycles());
+		cloned->SetTimestamp(GetTimestamp());
+		//Set payload
+		cloned->SetPayload(GetMediaData(),GetMediaLength());
+		//Set time
+		cloned->SetTime(GetTime());
+		//Return it
+		return cloned;
+	}
+
+	QWORD GetTime()			{ return time;		}
+	void  SetTime(QWORD time )	{ this->time = time;	}
 private:
 	QWORD time;
+};
+
+class RTPRedundantPacket:
+	public RTPTimedPacket
+{
+public:
+	RTPRedundantPacket(MediaFrame::Type media,BYTE *data,DWORD size);
+
+	BYTE* GetPrimaryPayloadData() 		const { return primaryData;	}
+	DWORD GetPrimaryPayloadSize()		const { return primarySize;	}
+	BYTE  GetPrimaryType()			const { return primaryType;	}
+	BYTE  GetPrimaryCodec()			const { return primaryCodec;	}
+	void  SetPrimaryCodec(BYTE codec)	      { primaryCodec = codec;	}
+
+	RTPTimedPacket* CreatePrimaryPacket();
+	
+	BYTE  GetRedundantCount()		const { return headers.size();	}
+	BYTE* GetRedundantPayloadData(int i)	const { return i<headers.size()?redundantData+headers[i].ini:NULL;	}
+	DWORD GetRedundantPayloadSize(int i) 	const { return i<headers.size()?headers[i].size:0;			}
+	BYTE  GetRedundantType(int i)		const { return i<headers.size()?headers[i].type:0;			}
+	BYTE  GetRedundantCodec(int i)		const { return i<headers.size()?headers[i].codec:0;			}
+	BYTE  GetRedundantOffser(int i)		const { return i<headers.size()?headers[i].offset:0;			}
+	BYTE  GetRedundantTimestamp(int i)	const { return i<headers.size()?GetTimestamp()-headers[i].offset:0;	}
+	void  SetRedundantCodec(int i,BYTE codec)     { if (i<headers.size()) headers[i].codec = codec;			}
+
+private:
+	struct RedHeader
+	{
+		BYTE  type;
+		BYTE  codec;
+		DWORD offset;
+		DWORD ini;
+		DWORD size;
+		RedHeader(BYTE type,DWORD offset,DWORD ini,DWORD size)
+		{
+			this->codec = type;
+			this->type = type;
+			this->offset = offset;
+			this->ini = ini;
+			this->size = size;
+		}
+	};
+private:
+	std::vector<RedHeader> headers;
+	BYTE	primaryType;
+	BYTE	primaryCodec;
+	DWORD	primarySize;
+	BYTE*	primaryData;
+	BYTE*	redundantData;
 };
 
 class RTPDepacketizer
@@ -711,7 +793,16 @@ public:
 
 	struct NACKField : public Field
 	{
-		
+
+		/*
+		 *
+		    0                   1                   2                   3
+		    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		   |            PID                |             BLP               |
+		   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		 */
+
 		WORD pid;
 		WORD blp;
 
@@ -725,20 +816,20 @@ public:
 			this->pid = pid;
 			this->blp = blp;
 		}
-		virtual DWORD GetSize() { return 8;}
+		virtual DWORD GetSize() { return 4;}
 		virtual DWORD Parse(BYTE* data,DWORD size)
 		{
-			if (size<8) return 0;
-			pid = get4(data,0);
-			blp = get4(data,4);
-			return 8;
+			if (size<4) return 0;
+			pid = get2(data,0);
+			blp = get2(data,2);
+			return 4;
 		}
 		virtual DWORD Serialize(BYTE* data,DWORD size)
 		{
-			if (size<8) return 0;
-			set4(data,0,pid);
-			set4(data,4,blp);
-			return 8;
+			if (size<4) return 0;
+			set2(data,0,pid);
+			set2(data,2,blp);
+			return 4;
 		}
 	};
 

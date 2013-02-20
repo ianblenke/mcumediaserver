@@ -17,7 +17,7 @@ BUILD = build/$(TAG)
 BIN   = bin/$(TAG)
 
 
-OBJS= rtpsession.o rtp.o  stunmessage.o remoteratecontrol.o crc32calc.o
+OBJS= rtpsession.o rtp.o  stunmessage.o remoteratecontrol.o crc32calc.o fecdecoder.o
 OBJSSENDER = $(OBJS) sender.o
 OBJSRECEIVER = $(OBJS) receiver.o
 BUILDOBJSSENDER = $(addprefix $(BUILD)/,$(OBJSSENDER))

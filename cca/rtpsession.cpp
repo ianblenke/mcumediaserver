@@ -17,6 +17,7 @@
 #include <time.h>
 #include "log.h"
 #include "tools.h"
+#include "codecs.h"
 #include "rtp.h"
 #include "rtpsession.h"
 #include "stunmessage.h"
@@ -144,6 +145,7 @@ RTPSession::RTPSession(MediaFrame::Type media,Listener *listener) : remoteRateCo
 	decript = false;
 	sendSRTPSession = NULL;
 	recvSRTPSession = NULL;
+	recvSRTPSessionRTX = NULL;
 	sendKey		= NULL;
 	recvKey		= NULL;
 	//No ice
@@ -151,6 +153,10 @@ RTPSession::RTPSession(MediaFrame::Type media,Listener *listener) : remoteRateCo
 	iceLocalPwd = NULL;
 	iceRemoteUsername = NULL;
 	iceRemotePwd = NULL;
+	//NO FEC
+	useFEC = false;
+	useNACK = false;
+	isNACKEnabled = false;
 	//Fill with 0
 	memset(sendPacket,0,MTU);
 	//Preparamos las direcciones de envio
@@ -188,12 +194,24 @@ RTPSession::~RTPSession()
 	if (recvSRTPSession)
 		//Dealoacate
 		srtp_dealloc(recvSRTPSession);
+	//If RTX
+	if (recvSRTPSessionRTX)
+		//Dealoacate
+		srtp_dealloc(recvSRTPSessionRTX);
 	if (sendKey)
 		free(sendKey);
 	if (recvKey)
 		free(recvKey);
 	if (cname)
 		free(cname);
+	//Delete rtx packets
+	for (RTPOrderedPackets::iterator it = rtxs.begin(); it!=rtxs.end();++it)
+	{
+		//Get pacekt
+		RTPTimedPacket *pkt = it->second;
+		//Delete object
+		delete(pkt);
+	}
 }
 
 void RTPSession::SetSendingRTPMap(RTPMap &map)
@@ -247,6 +265,7 @@ int RTPSession::SetLocalCryptoSDES(const char* suite, const char* key64)
 	//Set polciy values
 	policy.ssrc.type	= ssrc_any_outbound;
 	policy.ssrc.value	= 0;
+	//policy.allow_repeat_tx  = 1; <--- Not all srtp libs containts it
 	policy.key		= sendKey;
 	policy.next		= NULL;
 
@@ -286,6 +305,12 @@ int RTPSession::SetProperties(const RTPSession::Properties& properties)
 				free(cname);
 			//Clone
 			cname = strdup(it->second.c_str());
+		} else if (it->first.compare("useFEC")==0) {
+			//Set fec decoding
+			useFEC = atoi(it->second.c_str());
+		} else if (it->first.compare("useNACK")==0) {
+			//Set fec decoding
+			useNACK = atoi(it->second.c_str());
 		} else {
 			Error("Unknown RTP property [%s]\n",it->first.c_str());
 		}
@@ -375,6 +400,15 @@ int RTPSession::SetRemoteCryptoSDES(const char* suite, const char* key64)
 	if (err!=err_status_ok)
 		//Error
 		return Error("Failed set remote SDES  (%d)\n", err);
+
+
+	//Create new
+	err = srtp_create(&recvSRTPSessionRTX,&policy);
+
+	//Check error
+	if (err!=err_status_ok)
+		//Error
+		Error("------------------------------------Failed set remote RTX SDES  (%d)\n", err);
 
 	//Decript
 	decript = true;
@@ -615,7 +649,7 @@ int RTPSession::SendPacket(RTCPCompoundPacket &rtcp)
 	if (sendRtcpAddr.sin_addr.s_addr == INADDR_ANY)
 	{
 		//Do we have rec ip?
-		if (recIP!=INADDR_ANY && !muxRTCP)
+		if (recIP!=INADDR_ANY && muxRTCP)
 		{
 			//Do NAT
 			sendRtcpAddr.sin_addr.s_addr = recIP;
@@ -632,7 +666,7 @@ int RTPSession::SendPacket(RTCPCompoundPacket &rtcp)
 	//Check result
 	if (!len)
 		//Error
-		return 0;
+		return Error("Error serializing RTCP packet\n");
 
 	//If encripted
 	if (encript)
@@ -757,8 +791,7 @@ int RTPSession::SendPacket(RTPPacket &packet,DWORD timestamp)
 	//Check if we ar encripted
 	if (encript)
 	{
-
-		//Encrip
+		//Encript
 		err_status_t err = srtp_protect(sendSRTPSession,sendPacket,&len);
 		//Check error
 		if (err!=err_status_ok)
@@ -767,11 +800,45 @@ int RTPSession::SendPacket(RTPPacket &packet,DWORD timestamp)
 	}
 
 	//Mandamos el mensaje
-	int ret = sendto(simSocket,sendPacket,len,0,(sockaddr *)&sendAddr,sizeof(struct sockaddr_in));
+	int ret;
+
+	//if (!(rand() %16))
+		ret = sendto(simSocket,sendPacket,len,0,(sockaddr *)&sendAddr,sizeof(struct sockaddr_in));
 
 	//Inc stats
 	numSendPackets++;
 	totalSendBytes += packet.GetMediaLength();
+
+	//Add it rtx queue
+	if (useNACK)
+	{
+		//Create new pacekt
+		RTPTimedPacket *rtx = new RTPTimedPacket(media,sendPacket,len);
+		//Block
+		rtxUse.WaitUnusedAndLock();
+		//Add it to que
+		rtxs[rtx->GetExtSeqNum()] = rtx;
+		//Get time for packets to discard
+		QWORD until = getTime()/1000 - fmax(rtt*2,100);
+		//Delete old packets 
+		RTPOrderedPackets::iterator it = rtxs.begin();
+		//Until the end
+		while(it!=rtxs.end())
+		{
+			//Get pacekt
+			RTPTimedPacket *pkt = it->second;
+			//Check time
+			if (pkt->GetTime()>until)
+				//Keep the rest
+				break;
+			//DElete from queue and move next
+			rtxs.erase(it++);
+			//Delete object
+			delete(pkt);
+		}
+		//Unlock
+		rtxUse.Unlock();
+	}
 
 	//Exit
 	return (ret>0);
@@ -822,6 +889,14 @@ int RTPSession::ReadRTCP()
 				//Clean response
 				delete(resp);
 			}
+			//Check if we have sendinf ip address
+			if (sendRtcpAddr.sin_addr.s_addr == INADDR_ANY)
+			{
+				//Do NAT
+				sendRtcpAddr.sin_addr.s_addr = from_addr.sin_addr.s_addr;
+				//Set port
+				sendRtcpAddr.sin_port = from_addr.sin_addr.s_addr;
+			}
 		}
 
 		//Delete message
@@ -831,26 +906,37 @@ int RTPSession::ReadRTCP()
 	}
 
 	//Check if it is RTCP
-	if (RTCPCompoundPacket::IsRTCP(buffer,size))
+	if (!RTCPCompoundPacket::IsRTCP(buffer,size))
+		//Exit
+		return 0;
+
+	//Check if we have sendinf ip address
+	if (sendRtcpAddr.sin_addr.s_addr == INADDR_ANY)
 	{
-		//Decript
-		if (decript)
-		{
-			//unprotect
-			err_status_t err = srtp_unprotect_rtcp(recvSRTPSession,buffer,&size);
-			//Check error
-			if (err!=err_status_ok)
-				return Error("Error unprotecting rtcp packet [%d]\n",err);
-		}
-		//RTCP mux disabled
-		muxRTCP = false;
-		//Parse it
-		RTCPCompoundPacket* rtcp = RTCPCompoundPacket::Parse(buffer,size);
-		//Check packet
-		if (rtcp)
-			//Handle incomming rtcp packets
-			ProcessRTCPPacket(rtcp);
+		//Do NAT
+		sendRtcpAddr.sin_addr.s_addr = from_addr.sin_addr.s_addr;
+		//Set port
+		sendRtcpAddr.sin_port = from_addr.sin_addr.s_addr;
 	}
+	
+	//Decript
+	if (decript)
+	{
+		//unprotect
+		err_status_t err = srtp_unprotect_rtcp(recvSRTPSession,buffer,&size);
+		//Check error
+		if (err!=err_status_ok)
+			return Error("Error unprotecting rtcp packet [%d]\n",err);
+	}
+	//RTCP mux disabled
+	muxRTCP = false;
+	//Parse it
+	RTCPCompoundPacket* rtcp = RTCPCompoundPacket::Parse(buffer,size);
+	//Check packet
+	if (rtcp)
+		//Handle incomming rtcp packets
+		ProcessRTCPPacket(rtcp);
+	
 	//OK
 	return 1;
 }
@@ -861,8 +947,10 @@ int RTPSession::ReadRTCP()
 *********************************/
 int RTPSession::ReadRTP()
 {
-	BYTE buffer[MTU];
+	BYTE data[MTU];
+	BYTE *buffer = data;
 	sockaddr_in from_addr;
+	bool isRTX = false;
 	DWORD from_len = sizeof(from_addr);
 
 	//Receive from everywhere
@@ -1001,41 +1089,107 @@ int RTPSession::ReadRTP()
 	//Check minimum size for rtp packet
 	if (size<12)
 		return 0;
+
+	//This should be improbed
+	if (useNACK && recSSRC && recSSRC!=RTPPacket::GetSSRC(buffer))
+	{
+		Debug("-----nacked %x %x\n",recSSRC,RTPPacket::GetSSRC(buffer));
+		//It is a retransmited packet
+		isRTX = true;
+	}
 	
 	//Check if it is encripted
 	if (decript)
 	{
-		//unprotect
-		err_status_t err = srtp_unprotect(recvSRTPSession,buffer,&size);
-		//Check error
+		err_status_t err;
+		//Check if it is a retransmited packet
+		if (!isRTX)
+			//unprotect
+			err = srtp_unprotect(recvSRTPSession,buffer,&size);
+		else
+			//unprotect RTX
+			err = srtp_unprotect(recvSRTPSessionRTX,buffer,&size);
+		//Check status
 		if (err!=err_status_ok)
+			//Error
 			return Error("Error unprotecting rtp packet [%d]\n",err);
 	}
 
-	//Create rtp packet
-	RTPTimedPacket *packet = new RTPTimedPacket(media,buffer,size);
-
-	//Obtenemos el tipo
-	BYTE type = packet->GetType();
-
-	//Check maps
-	if (rtpMapIn)
+	//If it is a retransmission
+	if (isRTX)
 	{
-		//Find the type in the map
-		RTPMap::iterator it = rtpMapIn->find(type);
-		//Check it is in there
-		if (it==rtpMapIn->end())
+		//Get original sequence number
+		WORD osn = get2(buffer,sizeof(rtp_hdr_t));
+		//Move origin
+		for (int i=sizeof(rtp_hdr_t)-1;i>=0;--i)
+			//Move
+			buffer[i+2] = buffer[i];
+		//Move init
+		buffer+=2;
+		//Set original seq num
+		set2(buffer,2,osn);
+	}
+
+	//Get type
+	BYTE type = RTPPacket::GetType(buffer);
+
+	//Set initial codec
+	BYTE codec = rtpMapIn->GetCodecForType(type);
+
+	//Check codec
+	if (codec==RTPMap::NotFound)
+		//Exit
+		return Error("-RTP packet type unknown [%d]\n",type);
+
+	//Create rtp packet
+	RTPTimedPacket *packet = NULL;
+
+	//Peek type
+	if (codec==TextCodec::T140RED || codec==VideoCodec::RED)
+	{
+		//Create redundant type
+		RTPRedundantPacket *red = new RTPRedundantPacket(media,buffer,size);
+		//Get primary type
+		BYTE t = red->GetPrimaryType();
+		//Map primary data codec
+		BYTE c = rtpMapIn->GetCodecForType(t);
+		//Check codec
+		if (c==RTPMap::NotFound)
 		{
-			//Delete pacekt
-			delete(packet);
+			//Delete red packet
+			delete(red);
 			//Exit
-			return Error("-RTP packet type unknown [%d]\n",type);
+			return Error("-RTP packet type unknown for primary type of redundant data [%d]\n",t);
 		}
-		//It is our codec
-		packet->SetCodec(it->second);
-	} else
-		//Set codec
-		packet->SetCodec(type);
+		//Set it
+		red->SetPrimaryCodec(c);
+		//For each redundant packet
+		for (int i=0; i<red->GetRedundantCount();++i)
+		{
+			//Get redundant type
+			BYTE t = red->GetRedundantType(i);
+			//Map redundant data codec
+			BYTE c = rtpMapIn->GetCodecForType(t);
+			//Check codec
+			if (c==RTPMap::NotFound)
+			{
+				//Delete red packet
+				delete(red);
+				//Exit
+				return Error("-RTP packet type unknown for primary type of secundary data [%d,%d]\n",i,t);
+			}
+			//Set it
+			red->SetRedundantCodec(i,c);
+		}
+		//Set packet
+		packet = red;
+	} else {
+		//Create normal packet
+		packet = new RTPTimedPacket(media,buffer,size);
+	}
+
+	//Set codec
+	packet->SetCodec(codec);
 
 	//Get ssrc
 	DWORD ssrc = packet->GetSSRC();
@@ -1043,15 +1197,22 @@ int RTPSession::ReadRTP()
 	//If new ssrc
 	if (recSSRC!=ssrc)
 	{
-		Log("-New SSSRC [new:%x,old:%x]\n",ssrc,recSSRC);
-		//Send SR to old one
-		SendSenderReport();
-		//Reset packets
-		packets.Reset();
-		//Reset cycles
-		recCycles = 0;
-		//Reset
-		recExtSeq = 0;
+		//Check if it is from the retransmission stream
+		if (!isRTX)
+		{
+			Log("-New SSSRC [new:%x,old:%x]\n",ssrc,recSSRC);
+			//Send SR to old one
+			SendSenderReport();
+			//Reset packets
+			packets.Reset();
+			//Reset cycles
+			recCycles = 0;
+			//Reset
+			recExtSeq = 0;
+		} else {
+			//Set SSRC of the original stream
+			packet->SetSSRC(recSSRC);
+		}
 	}
 	
 	//Update ssrc
@@ -1059,14 +1220,14 @@ int RTPSession::ReadRTP()
 	
 	//Get sec number
 	WORD seq = packet->GetSeqNum();
-
+	
 	//Check if we have a sequence wrap
 	if (seq<0x00FF && (recExtSeq & 0xFFFF)>0xFF00)
 		//Increase cycles
 		recCycles++;
 
 	//Set cycles
-	packet->SetCycles(recCycles);
+	packet->SetSeqCycles(recCycles);
 
 	if (media==MediaFrame::Video)
 		//Update rate control
@@ -1089,6 +1250,49 @@ int RTPSession::ReadRTP()
 	//If we have a not out of order pacekt
 	if (extSeq>recExtSeq)
 	{
+		//If we are using NACK and there are missing packets
+		if (isNACKEnabled && recExtSeq && extSeq>(recExtSeq+1))
+		{
+			//Get number of lost packets
+			WORD lost = extSeq-recExtSeq-1;
+			//Base packet missing
+			WORD base = recExtSeq+1;
+
+			//Generate new RTCP NACK report
+			RTCPCompoundPacket* rtcp = new RTCPCompoundPacket();
+
+			//Send them
+			while (lost>0)
+			{
+				//Skip base
+				lost--;
+				//Get number of lost in the 16 mask
+				WORD n = lost;
+				//Check nex 16 packets
+				if (n>16)
+					//Clip
+					n = 16;
+				//Create mask
+				WORD mask = 0xFFFF << (16-n);
+				//Create NACK
+				RTCPRTPFeedback *nack = RTCPRTPFeedback::Create(RTCPRTPFeedback::NACK,sendSSRC,recSSRC);
+				//Limit incoming bitrate
+				nack->AddField( new RTCPRTPFeedback::NACKField(base,mask));
+				//Add to packet
+				rtcp->AddRTCPacket(nack);
+				//Reduce lost
+				lost -= n;
+				//Increase base
+				base += 16;
+			}
+
+			//Send packet
+			SendPacket(*rtcp);
+
+			//Delete it
+			delete(rtcp);
+		}
+		
 		//Update seq num
 		recExtSeq = extSeq;
 
@@ -1114,10 +1318,42 @@ int RTPSession::ReadRTP()
 		recTimestamp = packet->GetClockTimestamp();
 	}
 
-	//Push it back
-	if (!packets.Add(packet))
-		//It was lost forever
-		return 0;
+	//Check if we are using fec
+	if (useFEC)
+	{
+		//Append to the FEC decoder
+		if (fec.AddPacket(packet))
+			//Append only packets with media data
+			packets.Add(packet);
+		//Try to recover
+		RTPTimedPacket* recovered = fec.Recover();
+		//If we have recovered a pacekt
+		while(recovered)
+		{
+			//Log
+			Log("packet receovered!!!!\n");
+			//Overwrite time with the time of the original 
+			recovered->SetTime(packet->GetTime());
+			//Get pacekte type
+			BYTE t = recovered->GetType();
+			//Map receovered data codec
+			BYTE c = rtpMapIn->GetCodecForType(t);
+			//Check codec
+			if (c!=RTPMap::NotFound)
+				//Set codec
+				recovered->SetCodec(c);
+			else
+				//Set type for passtrhought
+				recovered->SetCodec(t);
+			//add recovered packet
+			packets.Add(recovered);
+			//Try to recover another one (yuhu!)
+			recovered = fec.Recover();
+		}
+	} else {
+		//Add pacekt
+		packets.Add(packet);
+	}
 
 	//Check if we need to send SR
 	if (isZeroTime(&lastSR) || getDifTime(&lastSR)>1000000)
@@ -1306,14 +1542,25 @@ void RTPSession::ProcessRTCPPacket(RTCPCompoundPacket *rtcp)
 				break;
 			case RTCPPacket::RTPFeedback:
 			{
-
 				//Get feedback packet
 				RTCPRTPFeedback *fb = (RTCPRTPFeedback*) packet;
 				//Check feedback type
 				switch(fb->GetFeedbackType())
 				{
 					case RTCPRTPFeedback::NACK:
-						
+						for (BYTE i=0;i<fb->GetFieldCount();i++)
+						{
+							//Get field
+							RTCPRTPFeedback::NACKField *field = (RTCPRTPFeedback::NACKField*) fb->GetField(i);
+							//Resent it
+							ReSendPacket(field->pid);
+							//Check each bit of the mask
+							for (int i=0;i<16;i++)
+								//Check it bit is present to rtx the packets
+								if ((field->blp >> (15-i)) & 1)
+									//Resent it
+									ReSendPacket(field->pid+i+1);
+						}
 						break;
 					case RTCPRTPFeedback::TempMaxMediaStreamBitrateRequest:
 						for (BYTE i=0;i<fb->GetFieldCount();i++)
@@ -1360,14 +1607,19 @@ void RTPSession::ProcessRTCPPacket(RTCPCompoundPacket *rtcp)
 							listener->onFPURequested(this);
 						break;
 					case RTCPPayloadFeedback::SliceLossIndication:
+						Log("-SliceLossIndication\n");
 						break;
 					case RTCPPayloadFeedback::ReferencePictureSelectionIndication:
+						Log("-ReferencePictureSelectionIndication\n");
 						break;
 					case RTCPPayloadFeedback::TemporalSpatialTradeOffRequest:
+						Log("-TemporalSpatialTradeOffRequest\n");
 						break;
 					case RTCPPayloadFeedback::TemporalSpatialTradeOffNotification:
+						Log("-TemporalSpatialTradeOffNotification\n");
 						break;
 					case RTCPPayloadFeedback::VideoBackChannelMessage:
+						Log("-VideoBackChannelMessage\n");
 						break;
 					case RTCPPayloadFeedback::ApplicationLayerFeeedbackMessage:
 						for (BYTE i=0;i<fb->GetFieldCount();i++)
@@ -1542,6 +1794,11 @@ int RTPSession::SendFIR()
 	//Add to rtcp
 	rtcp->AddRTCPacket(fir);
 
+	//Add PLI
+	RTCPPayloadFeedback *pli = RTCPPayloadFeedback::Create(RTCPPayloadFeedback::PictureLossIndication,sendSSRC,recSSRC);
+	//Add to rtcp
+	rtcp->AddRTCPacket(pli);
+
 	//Send packet
 	int ret = SendPacket(*rtcp);
 
@@ -1565,8 +1822,14 @@ void RTPSession::SetRTT(DWORD rtt)
 {
 	//Set it
 	this->rtt = rtt;
-	//Update
-	packets.SetMaxWaitTime(fmin(rtt/2,100));
+	//If it is video
+	if (media==MediaFrame::Video)
+		//Update
+		packets.SetMaxWaitTime(fmax(rtt*2,100));
+	//Check RTT to enable NACK
+	if (useNACK)
+		//Enable NACK only if RTT is small
+		isNACKEnabled = (rtt < 60);
 }
 
 void RTPSession::onTargetBitrateRequested(DWORD bitrate)
@@ -1591,4 +1854,28 @@ void RTPSession::onTargetBitrateRequested(DWORD bitrate)
 
 	//Delete it
 	delete(rtcp);
+}
+
+void RTPSession::ReSendPacket(int seq)
+{
+	//Lock
+	rtxUse.IncUse();
+
+	//Calculate ext seq number
+	DWORD ext = ((DWORD)recCycles)<<16 | seq;
+
+	//Find packet to retransmit
+	RTPOrderedPackets::iterator it = rtxs.find(ext);
+
+	//If we still have it
+	if (it!=rtxs.end())
+	{
+		//Get packet
+		RTPTimedPacket* packet = it->second;
+		//Re send pacekt
+		sendto(simSocket,packet->GetData(),packet->GetSize(),0,(sockaddr *)&sendAddr,sizeof(struct sockaddr_in));
+	}
+
+	//Unlock
+	rtxUse.DecUse();
 }
