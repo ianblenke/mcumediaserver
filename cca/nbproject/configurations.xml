@@ -6,27 +6,35 @@
                    projectFiles="true"
                    kind="SOURCE_LOGICAL_FOLDER">
       <itemPath>acumulator.h</itemPath>
+      <itemPath>bitstream.h</itemPath>
       <itemPath>codecs.h</itemPath>
       <itemPath>config.h</itemPath>
+      <itemPath>crc32calc.h</itemPath>
+      <itemPath>fecdecoder.h</itemPath>
       <itemPath>log.h</itemPath>
       <itemPath>media.h</itemPath>
       <itemPath>remoteratecontrol.h</itemPath>
       <itemPath>rtp.h</itemPath>
       <itemPath>rtpbuffer.h</itemPath>
       <itemPath>rtpsession.h</itemPath>
+      <itemPath>stunmessage.h</itemPath>
       <itemPath>tools.h</itemPath>
       <itemPath>use.h</itemPath>
       <itemPath>version.h</itemPath>
+      <itemPath>waitqueue.h</itemPath>
     </logicalFolder>
     <logicalFolder name="SourceFiles"
                    displayName="Source Files"
                    projectFiles="true"
                    kind="SOURCE_LOGICAL_FOLDER">
+      <itemPath>crc32calc.cpp</itemPath>
+      <itemPath>fecdecoder.cpp</itemPath>
       <itemPath>receiver.cpp</itemPath>
       <itemPath>remoteratecontrol.cpp</itemPath>
       <itemPath>rtp.cpp</itemPath>
       <itemPath>rtpsession.cpp</itemPath>
       <itemPath>sender.cpp</itemPath>
+      <itemPath>stunmessage.cpp</itemPath>
     </logicalFolder>
     <logicalFolder name="TestFiles"
                    displayName="Test Files"
@@ -49,11 +57,6 @@
         <platform>2</platform>
       </toolsSet>
       <compileType>
-        <linkerTool>
-          <output>bin/debug/sender</output>
-        </linkerTool>
-      </compileType>
-      <folder path="TestFiles/f1">
         <cTool>
           <incDir>
             <pElem>.</pElem>
@@ -65,9 +68,9 @@
           </incDir>
         </ccTool>
         <linkerTool>
-          <output>${TESTDIR}/TestFiles/f1</output>
+          <output>bin/debug/sender</output>
         </linkerTool>
-      </folder>
+      </compileType>
     </conf>
     <conf name="Release" type="1">
       <toolsSet>
@@ -78,9 +81,15 @@
       <compileType>
         <cTool>
           <developmentMode>5</developmentMode>
+          <incDir>
+            <pElem>.</pElem>
+          </incDir>
         </cTool>
         <ccTool>
           <developmentMode>5</developmentMode>
+          <incDir>
+            <pElem>.</pElem>
+          </incDir>
         </ccTool>
         <fortranCompilerTool>
           <developmentMode>5</developmentMode>
@@ -88,22 +97,10 @@
         <asmTool>
           <developmentMode>5</developmentMode>
         </asmTool>
-      </compileType>
-      <folder path="TestFiles/f1">
-        <cTool>
-          <incDir>
-            <pElem>.</pElem>
-          </incDir>
-        </cTool>
-        <ccTool>
-          <incDir>
-            <pElem>.</pElem>
-          </incDir>
-        </ccTool>
         <linkerTool>
           <output>${TESTDIR}/TestFiles/f1</output>
         </linkerTool>
-      </folder>
+      </compileType>
     </conf>
   </confs>
 </configurationDescriptor>

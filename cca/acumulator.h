@@ -29,9 +29,16 @@ public:
 	DWORD GetWindow()	const { return window;		}
 	bool  IsInWindow()	const { return inWindow;	}
 	
-	long double GetInstantAvg()	const { return GetAcumulated()/GetWindow();	}
-	long double GetMinAvg()		const { return GetMin()/GetWindow();		}
-	long double GetMaxAvg()		const { return GetMax()/GetWindow();		}
+	long double GetInstantAvg()	const { return GetInstant()*1000/GetWindow();	}
+	long double GetAverage()	const { return GetAcumulated()*1000/GetDiff();	}
+	long double GetMinAvg()		const { return GetMin()*1000/GetWindow();	}
+	long double GetMaxAvg()		const { return GetMax()*1000/GetWindow();	}
+
+	void ResetMinMax()
+	{
+		max = 0;
+		min = (QWORD)-1;
+	}
 
 	void Reset(QWORD now)
 	{

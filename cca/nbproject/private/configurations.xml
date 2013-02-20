@@ -8,7 +8,7 @@
         <configurationname>GizmoSimple</configurationname>
       </gizmo_options>
       <runprofile version="6">
-        <args> --ip 192.168.64.1 --port 5000 --local-port 5000 </args>
+        <args>--ip 192.168.64.1 --port 10000 --rate 128000 --rate-min 128000</args>
         <rundir>bin/debug</rundir>
         <buildfirst>true</buildfirst>
         <console-type>0</console-type>

@@ -22,11 +22,13 @@ public:
 		localPort = 0;
 		rate = 512000;
 		rateMin = 0;
+		rateLimit = 0;
 		fps = 30;
 		gop = 300;
 		maxRTPSize = 1300;
 		scaleIP = 1;
 		sending = false;
+		limitCount = 0;
 	}
 
 	virtual void onFPURequested(RTPSession *session)
@@ -37,13 +39,14 @@ public:
 	virtual void onReceiverEstimatedMaxBitrate(RTPSession *session,DWORD bitrate)
 	{
 		Log("-onReceiverEstimatedMaxBitrate [bitrate:%d]\n",bitrate);
-		ChangeRate(bitrate);
+		setRateLimit(bitrate);
 	}
 
 	virtual void onTempMaxMediaStreamBitrateRequest(RTPSession *session,DWORD bitrate,DWORD overhead)
 	{
 		Log("-onTempMaxMediaStreamBitrateRequest [bitrate:%d,overhead:%d]\n",bitrate,overhead);
-		ChangeRate(bitrate+overhead);
+		setRateLimit(bitrate+overhead);
+		limitCount = fps;
 		session->SendTempMaxMediaStreamBitrateNotification(bitrate,overhead);
 	}
 
@@ -88,6 +91,7 @@ public:
         void setFps(DWORD fps)			{ this->fps = fps;			}
         void setRate(DWORD rate)		{ this->rate = rate;			}
 	void setRateMin(DWORD rate)		{ this->rateMin = rate;			}
+	void setRateLimit(DWORD rate)		{ this->rateLimit = rate;		}
         void setPort(int port)			{ this->port = port;			}
 	void setLocalPort(int port)		{ this->localPort = port;		}
         void setIp(char* ip)			{ this->ip = ip;			}
@@ -96,7 +100,7 @@ public:
 	void ChangeRate(DWORD bitrate)
 	{
 		//Calculate new min based on the new rate
-		rateMin = bitrate*rateMin/rate;
+		rateMin = ((QWORD)bitrate)*rateMin/rate;
 		//Set rate
 		rate = bitrate;
 		//Log
@@ -158,16 +162,54 @@ protected:
 		//Get start time
 		getUpdDifTime(&ini);
 
+		//Set initial bitrate
+		int current = rate/2;
+
 		//Until ctrl-c is pressed
 		while(sending)
 		{
+			//Calculate target bitrate
+			int target = current;
+
+			//Check temporal limits
+			if (rateAcu.IsInWindow())
+			{
+				//Get real sent bitrate during last second and convert to kbits (*1000/1000)
+				DWORD instant = rateAcu.GetInstantAvg();
+				//Check if are not in quarentine period or sending below limits
+				if (!limitCount || instant<rateLimit )
+					//Increase a 8% each second
+					target += fmax(target*0.08,10000)/fps+1;
+				else
+					//Calculate decrease rate and apply it
+					target = rateLimit;
+			}
+
+			//Check limits counter
+			if (limitCount>0)
+				//One frame less of limit
+				limitCount--;
+
+			//check max bitrate
+			if (target>rate)
+				//Set limit to max bitrate
+				target = rate;
+
+			//Calculate min rate
+			int targetMin = ((QWORD)target)*rateMin/rate;
+
 			//Calculate frame
-			DWORD frameSize = (gop+scaleIP-1)*rate/(8*fps*gop);
+			DWORD frameSize = (gop+scaleIP-1)*target/(8*fps*gop);
 			//Calculate min frame size
-			DWORD frameSizeMin = (gop+scaleIP-1)*rateMin/(8*fps*gop);
+			DWORD frameSizeMin = (gop+scaleIP-1)*targetMin/(8*fps*gop);
 			//Set P frame size
 			DWORD size = frameSizeMin + ((QWORD)(frameSize-frameSizeMin))*rand()/RAND_MAX;
 
+			Log("-%d sent frames [instant:%llf,target:%d,targetMin:%d,current:%d,rate:%d,rateMin:%d,rateLimit:%d]\n",num,rateAcu.GetInstantAvg(),target,targetMin,current,rate,rateMin,rateLimit);
+
+			//Upate current
+			current = target;
+			
 			//Check if its the firs frame of gop
 			if (!(num % gop))
 			{
@@ -177,9 +219,9 @@ protected:
 				if (num)
 					//Log it
 					Log("-%d sent frames [rate max:%llf,rate min:%llf,fps max:%lld,fps min:%lld]\n",num,rateAcu.GetMaxAvg(),rateAcu.GetMinAvg(),fpsAcu.GetMax(),fpsAcu.GetMin());
-				//Reset
-				rateAcu.Reset(getTime()/1000);
-				fpsAcu.Reset(getTime()/1000);
+				//Reset stats
+				rateAcu.ResetMinMax();
+				fpsAcu.ResetMinMax();
 			}
 
 			//New frame
@@ -239,10 +281,12 @@ private:
 	int   localPort;
 	DWORD rate;
 	DWORD rateMin;
+	DWORD rateLimit;
 	DWORD fps;
 	DWORD gop;
 	DWORD maxRTPSize;
 	DWORD scaleIP;
+	int   limitCount;
 	bool  sending;
 };
 

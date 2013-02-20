@@ -37,7 +37,10 @@ OBJECTFILES= \
 	${OBJECTDIR}/remoteratecontrol.o \
 	${OBJECTDIR}/rtp.o \
 	${OBJECTDIR}/receiver.o \
-	${OBJECTDIR}/rtpsession.o
+	${OBJECTDIR}/rtpsession.o \
+	${OBJECTDIR}/crc32calc.o \
+	${OBJECTDIR}/stunmessage.o \
+	${OBJECTDIR}/fecdecoder.o
 
 
 # C Compiler Flags
@@ -58,36 +61,51 @@ LDLIBSOPTIONS=
 
 # Build Targets
 .build-conf: ${BUILD_SUBPROJECTS}
-	"${MAKE}"  -f nbproject/Makefile-Release.mk dist/Release/GNU-Linux-x86/cca
+	"${MAKE}"  -f nbproject/Makefile-Release.mk build/Release/GNU-Linux-x86/tests/TestFiles/f1
 
-dist/Release/GNU-Linux-x86/cca: ${OBJECTFILES}
-	${MKDIR} -p dist/Release/GNU-Linux-x86
-	${LINK.cc} -o ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/cca ${OBJECTFILES} ${LDLIBSOPTIONS} 
+build/Release/GNU-Linux-x86/tests/TestFiles/f1: ${OBJECTFILES}
+	${MKDIR} -p build/Release/GNU-Linux-x86/tests/TestFiles
+	${LINK.cc} -o ${TESTDIR}/TestFiles/f1 ${OBJECTFILES} ${LDLIBSOPTIONS} 
 
 ${OBJECTDIR}/sender.o: sender.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/sender.o sender.cpp
+	$(COMPILE.cc) -O2 -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/sender.o sender.cpp
 
 ${OBJECTDIR}/remoteratecontrol.o: remoteratecontrol.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/remoteratecontrol.o remoteratecontrol.cpp
+	$(COMPILE.cc) -O2 -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/remoteratecontrol.o remoteratecontrol.cpp
 
 ${OBJECTDIR}/rtp.o: rtp.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/rtp.o rtp.cpp
+	$(COMPILE.cc) -O2 -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/rtp.o rtp.cpp
 
 ${OBJECTDIR}/receiver.o: receiver.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/receiver.o receiver.cpp
+	$(COMPILE.cc) -O2 -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/receiver.o receiver.cpp
 
 ${OBJECTDIR}/rtpsession.o: rtpsession.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/rtpsession.o rtpsession.cpp
+	$(COMPILE.cc) -O2 -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/rtpsession.o rtpsession.cpp
+
+${OBJECTDIR}/crc32calc.o: crc32calc.cpp 
+	${MKDIR} -p ${OBJECTDIR}
+	${RM} $@.d
+	$(COMPILE.cc) -O2 -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/crc32calc.o crc32calc.cpp
+
+${OBJECTDIR}/stunmessage.o: stunmessage.cpp 
+	${MKDIR} -p ${OBJECTDIR}
+	${RM} $@.d
+	$(COMPILE.cc) -O2 -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/stunmessage.o stunmessage.cpp
+
+${OBJECTDIR}/fecdecoder.o: fecdecoder.cpp 
+	${MKDIR} -p ${OBJECTDIR}
+	${RM} $@.d
+	$(COMPILE.cc) -O2 -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/fecdecoder.o fecdecoder.cpp
 
 # Subprojects
 .build-subprojects:
@@ -95,7 +113,7 @@ ${OBJECTDIR}/rtpsession.o: rtpsession.cpp
 # Clean Targets
 .clean-conf: ${CLEAN_SUBPROJECTS}
 	${RM} -r build/Release
-	${RM} dist/Release/GNU-Linux-x86/cca
+	${RM} build/Release/GNU-Linux-x86/tests/TestFiles/f1
 
 # Subprojects
 .clean-subprojects:

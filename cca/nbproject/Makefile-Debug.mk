@@ -37,7 +37,10 @@ OBJECTFILES= \
 	${OBJECTDIR}/remoteratecontrol.o \
 	${OBJECTDIR}/rtp.o \
 	${OBJECTDIR}/receiver.o \
-	${OBJECTDIR}/rtpsession.o
+	${OBJECTDIR}/rtpsession.o \
+	${OBJECTDIR}/crc32calc.o \
+	${OBJECTDIR}/stunmessage.o \
+	${OBJECTDIR}/fecdecoder.o
 
 
 # C Compiler Flags
@@ -67,27 +70,42 @@ bin/debug/sender: ${OBJECTFILES}
 ${OBJECTDIR}/sender.o: sender.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/sender.o sender.cpp
+	$(COMPILE.cc) -g -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/sender.o sender.cpp
 
 ${OBJECTDIR}/remoteratecontrol.o: remoteratecontrol.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/remoteratecontrol.o remoteratecontrol.cpp
+	$(COMPILE.cc) -g -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/remoteratecontrol.o remoteratecontrol.cpp
 
 ${OBJECTDIR}/rtp.o: rtp.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/rtp.o rtp.cpp
+	$(COMPILE.cc) -g -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/rtp.o rtp.cpp
 
 ${OBJECTDIR}/receiver.o: receiver.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/receiver.o receiver.cpp
+	$(COMPILE.cc) -g -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/receiver.o receiver.cpp
 
 ${OBJECTDIR}/rtpsession.o: rtpsession.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/rtpsession.o rtpsession.cpp
+	$(COMPILE.cc) -g -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/rtpsession.o rtpsession.cpp
+
+${OBJECTDIR}/crc32calc.o: crc32calc.cpp 
+	${MKDIR} -p ${OBJECTDIR}
+	${RM} $@.d
+	$(COMPILE.cc) -g -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/crc32calc.o crc32calc.cpp
+
+${OBJECTDIR}/stunmessage.o: stunmessage.cpp 
+	${MKDIR} -p ${OBJECTDIR}
+	${RM} $@.d
+	$(COMPILE.cc) -g -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/stunmessage.o stunmessage.cpp
+
+${OBJECTDIR}/fecdecoder.o: fecdecoder.cpp 
+	${MKDIR} -p ${OBJECTDIR}
+	${RM} $@.d
+	$(COMPILE.cc) -g -I. -MMD -MP -MF $@.d -o ${OBJECTDIR}/fecdecoder.o fecdecoder.cpp
 
 # Subprojects
 .build-subprojects:
