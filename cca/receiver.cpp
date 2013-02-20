@@ -46,8 +46,10 @@ public:
 		//Enable rtcp-mux and nack
 		prop["rtcp-mux"] = "1";
 		prop["useNACK"] = "1";
+		
 		//Add properties
 		sess.SetProperties(prop);
+		
 		//Set rtp map
 		map[96] = 96;
 		//Set map

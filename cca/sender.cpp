@@ -44,6 +44,7 @@ public:
 	{
 		Log("-onTempMaxMediaStreamBitrateRequest [bitrate:%d,overhead:%d]\n",bitrate,overhead);
 		ChangeRate(bitrate+overhead);
+		session->SendTempMaxMediaStreamBitrateNotification(bitrate,overhead);
 	}
 
 	bool Start()
@@ -131,6 +132,7 @@ protected:
 		//Enable rtcp-mux and nack
 		prop["rtcp-mux"] = "1";
 		prop["useNACK"] = "1";
+		
 		//Add properties
 		sess.SetProperties(prop);
 
