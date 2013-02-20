@@ -1058,8 +1058,6 @@ int RTPSession::ReadRTP()
 		if (rtcp)
 			//Handle incomming rtcp packets
 			ProcessRTCPPacket(rtcp);
-
-		Log("-got");
 		//Skip
 		return 1;
 	}
