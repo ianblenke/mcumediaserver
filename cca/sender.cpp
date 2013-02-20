@@ -36,12 +36,14 @@ public:
 	
 	virtual void onReceiverEstimatedMaxBitrate(RTPSession *session,DWORD bitrate)
 	{
-
+		Log("-onReceiverEstimatedMaxBitrate [bitrate:%d]\n",bitrate);
+		ChangeRate(bitrate);
 	}
 
 	virtual void onTempMaxMediaStreamBitrateRequest(RTPSession *session,DWORD bitrate,DWORD overhead)
 	{
-		
+		Log("-onTempMaxMediaStreamBitrateRequest [bitrate:%d,overhead:%d]\n",bitrate,overhead);
+		ChangeRate(bitrate+overhead);
 	}
 
 	bool Start()
@@ -88,7 +90,17 @@ public:
         void setPort(int port)			{ this->port = port;			}
 	void setLocalPort(int port)		{ this->localPort = port;		}
         void setIp(char* ip)			{ this->ip = ip;			}
-
+	void IncreasRate()			{ ChangeRate(rate*1.10);		}
+	void DecreaseRate()			{ ChangeRate(rate*0.90);		}
+	void ChangeRate(DWORD bitrate)
+	{
+		//Calculate new min based on the new rate
+		rateMin = bitrate*rateMin/rate;
+		//Set rate
+		rate = bitrate;
+		//Log
+		Log("-New bitrate [rate:%d,min:%d]\n",rate,rateMin);
+	}
 private:
 	static void * run(void *par)
 	{
@@ -106,6 +118,9 @@ protected:
 		RTPSession sess(MediaFrame::Video,this);
 		RTPPacket rtp(MediaFrame::Video,96);
 		RTPMap map;
+		RTPSession::Properties prop;
+		Acumulator fpsAcu(1000);
+		Acumulator rateAcu(1000);
 
 		//Set local port
 		sess.SetLocalPort(localPort);
@@ -113,9 +128,14 @@ protected:
 		//Init session
 		sess.Init();
 
+		//Enable rtcp-mux and nack
+		prop["rtcp-mux"] = 1;
+		prop["useNACK"] = 1;
+		//Add properties
+		sess.SetProperties(prop);
+
 		//Set rtp map
 		map[96] = 96;
-
 		//Set map
 		sess.SetSendingRTPMap(map);
 
@@ -125,10 +145,6 @@ protected:
 		//Set receiver ip and port
 		sess.SetRemotePort(ip,port);
 
-		//Calculate frame
-		DWORD frameSize = (gop+scaleIP-1)*rate/(8*fps*gop);
-		//Calculate min frame size
-		DWORD frameSizeMin = (gop+scaleIP-1)*rateMin/(8*fps*gop);
 		//Set packet clock rate
 		rtp.SetClockRate(90000);
 
@@ -143,13 +159,29 @@ protected:
 		//Until ctrl-c is pressed
 		while(sending)
 		{
+			//Calculate frame
+			DWORD frameSize = (gop+scaleIP-1)*rate/(8*fps*gop);
+			//Calculate min frame size
+			DWORD frameSizeMin = (gop+scaleIP-1)*rateMin/(8*fps*gop);
 			//Set P frame size
 			DWORD size = frameSizeMin + ((QWORD)(frameSize-frameSizeMin))*rand()/RAND_MAX;
 
 			//Check if its the firs frame of gop
 			if (!(num % gop))
+			{
 				//Set I frame size
 				size = frameSize*scaleIP;
+				//If not first
+				if (num)
+					//Log it
+					Log("-%d sent frames [rate max:%llf,rate min:%llf,fps max:%lld,fps min:%lld]\n",num,rateAcu.GetMaxAvg(),rateAcu.GetMinAvg(),fpsAcu.GetMax(),fpsAcu.GetMin());
+				//Reset
+				rateAcu.Reset(getTime()/1000);
+				fpsAcu.Reset(getTime()/1000);
+			}
+
+			//New frame
+			fpsAcu.Update(getTime()/1000,1);
 			
 			//Set timestamp
 			rtp.SetTimestamp(ts);
@@ -176,6 +208,8 @@ protected:
 					rtp.SetMark(true);
 				//Send it
 				sess.SendPacket(rtp);
+				//Acumulate
+				rateAcu.Update(getTime()/1000,rtp.GetSize()*8);
 			}
 
 			//Increase num of frames
@@ -212,7 +246,6 @@ private:
 
 int main(int argc, char** argv)
 {
-	char c;
 	//Create sender object
 	Sender sender;
 
@@ -279,8 +312,25 @@ int main(int argc, char** argv)
 	
 	//We are sending
 	printf("Sending... press [q] to stop\n");
+	//Get char
+	char c=getchar();
 	//Read until q is pressed
-	while ((c=getchar())!='q');
+	while (c!='q')
+	{
+		switch(c)
+		{
+			case 'i':
+				//Increase sending rate
+				sender.IncreasRate();
+				break;
+			case 'd':
+				//Decrease sending rate
+				sender.DecreaseRate();
+				break;
+		}
+		//Get char
+		c = getchar();
+	}
 
 	//Stop
 	sender.Stop();

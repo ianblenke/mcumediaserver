@@ -30,6 +30,7 @@ public:
 	bool Start()
 	{
 		RTPMap map;
+		RTPSession::Properties prop;
 
 		//Check params
 		if (!port)
@@ -42,9 +43,13 @@ public:
 		if (!sess.Init())
 			return Error("Error initing rtp session\n");
 
+		//Enable rtcp-mux and nack
+		prop["rtcp-mux"] = 1;
+		prop["useNACK"] = 1;
+		//Add properties
+		sess.SetProperties(prop);
 		//Set rtp map
 		map[96] = 96;
-
 		//Set map
 		sess.SetReceivingRTPMap(map);
 

@@ -28,6 +28,10 @@ public:
 	QWORD GetMax()		const { return max;		}
 	DWORD GetWindow()	const { return window;		}
 	bool  IsInWindow()	const { return inWindow;	}
+	
+	long double GetInstantAvg()	const { return GetAcumulated()/GetWindow();	}
+	long double GetMinAvg()		const { return GetMin()/GetWindow();		}
+	long double GetMaxAvg()		const { return GetMax()/GetWindow();		}
 
 	void Reset(QWORD now)
 	{
