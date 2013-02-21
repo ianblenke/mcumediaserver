@@ -311,6 +311,8 @@ int RTPSession::SetProperties(const RTPSession::Properties& properties)
 		} else if (it->first.compare("useNACK")==0) {
 			//Set fec decoding
 			useNACK = atoi(it->second.c_str());
+			//Enable NACK until first RTT
+			isNACKEnabled = useNACK;
 		} else {
 			Error("Unknown RTP property [%s]\n",it->first.c_str());
 		}
@@ -662,6 +664,8 @@ int RTPSession::SendPacket(RTCPCompoundPacket &rtcp)
 		sendRtcpAddr.sin_addr.s_addr = recIP;
 		//Set port
 		sendRtcpAddr.sin_port = htons(recPort);
+		//Log it
+		Log("-Sending to %s:%d with rtcp-muxing:%d\n",inet_ntoa(sendRtcpAddr.sin_addr),ntohs(sendRtcpAddr.sin_port),muxRTCP);
 	}
 
 	//Serialize
@@ -694,6 +698,7 @@ int RTPSession::SendPacket(RTCPCompoundPacket &rtcp)
 	if (ret<0)
 		//Return
 		return Error("-Error sending RTP packet [%d]\n",errno);
+
 	//Exit
 	return 1;
 }
@@ -913,7 +918,9 @@ int RTPSession::ReadRTCP()
 		//Do NAT
 		sendRtcpAddr.sin_addr.s_addr = from_addr.sin_addr.s_addr;
 		//Set port
-		sendRtcpAddr.sin_port = from_addr.sin_addr.s_addr;
+		sendRtcpAddr.sin_port = from_addr.sin_port;
+		//Log it
+		Log("-Got first RTCP, sending to %s:%d with rtcp-muxing:%d\n",inet_ntoa(sendRtcpAddr.sin_addr),ntohs(sendRtcpAddr.sin_port),muxRTCP);
 	}
 	
 	//Decript
@@ -1076,7 +1083,7 @@ int RTPSession::ReadRTP()
 		//Get also port
 		recPort = ntohs(from_addr.sin_port);
 		//Log
-		Log("-RTPSession NAT: received packet from [%s:%d]\n", inet_ntoa(from_addr.sin_addr), recPort);
+		Log("-RTPSession NAT: received packet from [%s:%d]\n", inet_ntoa(from_addr.sin_addr), ntohs(from_addr.sin_port));
 		//Check if got listener
 		if (listener)
 			//Request a I frame
@@ -1472,7 +1479,6 @@ void RTPSession::CancelGetPacket()
 
 void RTPSession::ProcessRTCPPacket(RTCPCompoundPacket *rtcp)
 {
-	Log("--------got rtcp\n");
 	//For each packet
 	for (int i = 0; i<rtcp->GetPacketCount();i++)
 	{
@@ -1783,6 +1789,10 @@ int RTPSession::SendSenderReport()
 int RTPSession::SendFIR()
 {
 	Log("-SendFIR\n");
+
+	//clear pacekts in the queue
+	packets.Clear();
+
 	//Create rtcp sender retpor
 	RTCPCompoundPacket* rtcp = CreateSenderReport();
 
@@ -1812,9 +1822,13 @@ int RTPSession::RequestFPU()
 {
 	//packets.Reset();
 	if (!pendingTMBR)
+	{
+		//request FIR
 		SendFIR();
-	else
+	} else {
+		//Wait for TMBN response to no overflow
 		requestFPU = true;
+	}
 }
 
 void RTPSession::SetRTT(DWORD rtt)
@@ -1824,11 +1838,11 @@ void RTPSession::SetRTT(DWORD rtt)
 	//If it is video
 	if (media==MediaFrame::Video)
 		//Update
-		packets.SetMaxWaitTime(fmax(rtt*2,100));
+		packets.SetMaxWaitTime(fmax(rtt,120)*2);
 	//Check RTT to enable NACK
 	if (useNACK)
 		//Enable NACK only if RTT is small
-		isNACKEnabled = (rtt < 60);
+		isNACKEnabled = (rtt < 120);
 }
 
 void RTPSession::onTargetBitrateRequested(DWORD bitrate)
