@@ -508,7 +508,13 @@ int RTPSession::SetRemotePort(char *ip,int sendPort)
 	sendAddr.sin_addr.s_addr 	= inet_addr(ip);
 	sendRtcpAddr.sin_addr.s_addr 	= inet_addr(ip);
 	sendAddr.sin_port 		= htons(sendPort);
-	sendRtcpAddr.sin_port 		= htons(sendPort+1);
+	//Check if doing rtcp muxing
+	if (muxRTCP)
+		//Same than rtp
+		sendRtcpAddr.sin_port 		= htons(sendPort);
+	else
+		//One more than rtp
+		sendRtcpAddr.sin_port 		= htons(sendPort+1);
 
 	//Open rtp and rtcp ports
 	sendto(simSocket,rtpEmpty,sizeof(rtpEmpty),0,(sockaddr *)&sendAddr,sizeof(struct sockaddr_in));
@@ -1466,6 +1472,7 @@ void RTPSession::CancelGetPacket()
 
 void RTPSession::ProcessRTCPPacket(RTCPCompoundPacket *rtcp)
 {
+	Log("--------got rtcp\n");
 	//For each packet
 	for (int i = 0; i<rtcp->GetPacketCount();i++)
 	{
