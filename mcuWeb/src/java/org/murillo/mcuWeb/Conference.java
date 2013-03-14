@@ -118,6 +118,7 @@ public class Conference implements Participant.Listener {
         addSupportedCodec("audio", Codecs.PCMA);
         addSupportedCodec("audio", Codecs.GSM);
         addSupportedCodec("audio", Codecs.SPEEX16);
+        addSupportedCodec("audio", Codecs.OPUS);
         //Enable all video codecs
         addSupportedCodec("video", Codecs.H264);
         addSupportedCodec("video", Codecs.VP8);
@@ -297,7 +298,7 @@ public class Conference implements Participant.Listener {
         this.profile = profile;
     }
 
-    public void setMosaicSlot(Integer num, Integer partId) {
+    public final void setMosaicSlot(Integer num, Integer partId) {
         //Set mosaic slot for default mosaic
         setMosaicSlot(XmlRpcMcuClient.DefaultMosaic, num, partId);
     }

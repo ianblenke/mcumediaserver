@@ -491,6 +491,8 @@ public class ConferenceMngr implements Conference.Listener {
         } catch (XmlRpcException ex) {
              //Log
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
+            //Error
+            return null;
         }
         //Launch event
         fireOnConferenceCreatead(conf);
