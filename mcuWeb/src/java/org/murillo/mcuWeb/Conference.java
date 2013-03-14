@@ -114,16 +114,18 @@ public class Conference implements Participant.Listener {
         //Create supported codec map
         supportedCodecs = new HashMap<String, List<Integer>>();
         //Enable all audio codecs
+        addSupportedCodec("audio", Codecs.SPEEX16);
+        addSupportedCodec("audio", Codecs.GSM);
+        addSupportedCodec("audio", Codecs.OPUS);
         addSupportedCodec("audio", Codecs.PCMU);
         addSupportedCodec("audio", Codecs.PCMA);
-        addSupportedCodec("audio", Codecs.GSM);
-        addSupportedCodec("audio", Codecs.SPEEX16);
-        addSupportedCodec("audio", Codecs.OPUS);
         //Enable all video codecs
         addSupportedCodec("video", Codecs.H264);
         addSupportedCodec("video", Codecs.VP8);
         addSupportedCodec("video", Codecs.H263_1998);
         addSupportedCodec("video", Codecs.H263_1996);
+        addSupportedCodec("video", Codecs.RED);
+        addSupportedCodec("video", Codecs.ULPFEC);
         //Enable all text codecs
         addSupportedCodec("text", Codecs.T140RED);
         addSupportedCodec("text", Codecs.T140);
@@ -430,10 +432,14 @@ public class Conference implements Participant.Listener {
         //If auto add participant to default mosaic
         if (addToDefaultMosaic)
         {
-            //Add it to the default mosiac
-            client.AddMosaicParticipant(id, XmlRpcMcuClient.DefaultMosaic, partId);
-            //Add it to the default sidebar
-            client.AddSidebarParticipant(id, XmlRpcMcuClient.DefaultSidebar, partId);
+            //Check if video is supported
+            if (part.getVideoSupported())
+                //Add it to the default mosiac
+                client.AddMosaicParticipant(id, XmlRpcMcuClient.DefaultMosaic, partId);
+            //Check if audio is supported
+            if (part.getAudioSupported())
+                //Add it to the default sidebar
+                client.AddSidebarParticipant(id, XmlRpcMcuClient.DefaultSidebar, partId);
         }
     }
 

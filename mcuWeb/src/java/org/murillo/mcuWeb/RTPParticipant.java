@@ -95,9 +95,9 @@ public class RTPParticipant extends Participant {
     private ArrayList<MediaDescription> rejectedMedias;
     private String videoContentType;
     private String h264profileLevelId;
-    private int h264packetization;
+    private Integer h264packetization;
     private final String h264profileLevelIdDefault = "428014";
-    private int videoBitrate;
+    private Integer videoBitrate;
     private SessionDescription remoteSDP;
     private SessionDescription localSDP;
     private Boolean isSecure;
@@ -611,6 +611,8 @@ public class RTPParticipant extends Participant {
             //Set attributes
             rtpMediaProperties.get(mediaName).put("ssrc", ssrc.toString());
             rtpMediaProperties.get(mediaName).put("cname", cname);
+            //Allow nack
+            rtpMediaProperties.get(mediaName).put("useNACK", "1");
         }
 
         //Add rtmpmap for each codec in supported order
@@ -626,8 +628,13 @@ public class RTPParticipant extends Participant {
                     Integer fmt = mapping.getKey();
                     //Append fmt
                     md.addFormat(fmt);
+                    if (codec!=Codecs.OPUS)
                     //Add rtmpmap
                     md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec));
+                    else
+                        //Add rtmpmap
+                        md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec),"2");
+                    //Depending on the codec
                     if (codec==Codecs.H264)
                     {
                         //Check if we are offering first
@@ -645,6 +652,9 @@ public class RTPParticipant extends Participant {
                     } else if (codec==Codecs.H263_1996) {
                         //Add h263 supported sizes
                         md.addFormatAttribute(fmt,"CIF=1;QCIF=1");
+                    } else if (codec==Codecs.ULPFEC) {
+                        //Enable fec
+                        rtpMediaProperties.get(mediaName).put("useFEC", "1");
                     } else if (codec == Codecs.T140RED) {
                         //Find t140 codec
                         Integer t140 = findTypeForCodec(rtpInMap,Codecs.T140);
@@ -951,7 +961,6 @@ public class RTPParticipant extends Participant {
                 //With feedback (WARNING: if one media has feedback, all will have feedback, FIX!!)
                 rtcpFeedBack = true;
 
-
             //FIX
             Integer h264type = 0;
             String maxh264profile = "";
@@ -1091,9 +1100,9 @@ public class RTPParticipant extends Participant {
                     for (int index=0;index<videoCodecs.size();index++)
                     {
                         //Check codec
-                        if (videoCodecs.get(index)==codec)
+                        if (videoCodecs.get(index)==codec && codec!=Codecs.RED && codec!=Codecs.ULPFEC)
                         {
-                            //Check if it is first codec for audio
+                            //Check if it is first codec for video
                             if (priority==Integer.MAX_VALUE)
                             {
                                 //Set port
