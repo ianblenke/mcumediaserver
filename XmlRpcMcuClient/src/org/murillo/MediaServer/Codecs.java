@@ -62,6 +62,7 @@ public class Codecs {
     public static final Integer G722    = 121;
     public static final Integer NELLY11 = 131;
     public static final Integer SPEEX16 = 117;
+    public static final Integer OPUS    = 98;
     public static final Integer TELEFONE_EVENT  = 100;
 
     public static final Integer H263_1996    = 34;
@@ -114,6 +115,7 @@ public class Codecs {
             if (name.equalsIgnoreCase("G726"))        return G726;
             if (name.equalsIgnoreCase("G722"))        return G722;
             if (name.equalsIgnoreCase("NELLY11"))     return NELLY11;
+            if (name.equalsIgnoreCase("OPUS"))        return OPUS;
             if (name.equalsIgnoreCase("telephone-event"))       return TELEFONE_EVENT;
         }
         else if (media.equals("video"))
@@ -149,6 +151,7 @@ public class Codecs {
             if (codec==G726)       return "G726";
             if (codec==G722)       return "G722";
             if (codec==NELLY11)    return "NELLY11";
+            if (codec==OPUS)       return "OPUS";
             if (codec==TELEFONE_EVENT)    return "telephone-event";
         }
         else if (media.equals("video"))
@@ -183,6 +186,7 @@ public class Codecs {
             if (codec==G726)            return 8000;
             if (codec==G722)            return 8000;
             if (codec==NELLY11)         return 11000;
+            if (codec==OPUS)            return 48000;
             if (codec==TELEFONE_EVENT)  return 8000;
         }
         else if (media.equals("video"))

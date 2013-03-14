@@ -474,6 +474,28 @@ public class XmlRpcMcuClient {
         //Return 
         return true;
     }
+
+    public Integer StartPublishing(Integer confId,String server,Integer port,String app,String stream) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,server,port,app,stream};
+        //Execute
+        HashMap response = (HashMap) client.execute("StartPublishing", request);
+        //Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+        //Return port
+        return (Integer)returnVal[0];
+    }
+
+    public boolean StopPublishing(Integer confId,Integer id) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,id};
+        //Execute
+        HashMap response = (HashMap) client.execute("StopPublishing", request);
+        //Return
+        return true;
+    }
     
     public boolean DeleteConference(Integer confId) throws XmlRpcException
     {
