@@ -115,7 +115,7 @@ public class Codecs {
             if (name.equalsIgnoreCase("G726"))        return G726;
             if (name.equalsIgnoreCase("G722"))        return G722;
             if (name.equalsIgnoreCase("NELLY11"))     return NELLY11;
-            if (name.equalsIgnoreCase("OPUS"))        return OPUS;
+            if (name.equalsIgnoreCase("opus"))        return OPUS;
             if (name.equalsIgnoreCase("telephone-event"))       return TELEFONE_EVENT;
         }
         else if (media.equals("video"))
@@ -151,7 +151,7 @@ public class Codecs {
             if (codec==G726)       return "G726";
             if (codec==G722)       return "G722";
             if (codec==NELLY11)    return "NELLY11";
-            if (codec==OPUS)       return "OPUS";
+            if (codec==OPUS)       return "opus";
             if (codec==TELEFONE_EVENT)    return "telephone-event";
         }
         else if (media.equals("video"))
