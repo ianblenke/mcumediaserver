@@ -10,14 +10,13 @@ import java.net.URL;
 import java.util.HashMap;
 import org.apache.xmlrpc.XmlRpcException;
 import org.apache.xmlrpc.client.XmlRpcClientConfigImpl;
+import org.murillo.MediaServer.Codecs.MediaType;
 
 /**
  *
  * @author Sergio
  */
 public class XmlRPCJSR309Client {
-
-    private enum MediaType {Audio,Video,Text};
 
     private XmlRpcTimedClient client;
     private XmlRpcClientConfigImpl config;
@@ -274,6 +273,56 @@ public class XmlRPCJSR309Client {
         return (((Integer)response.get("returnCode"))==1);
     }
 
+    public boolean EndpointSetLocalSTUNCredentials(Integer sessId,Integer endpointId,MediaType media,String username,String pwd) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,endpointId,media.valueOf(),username,pwd};
+        //Execute
+        HashMap response = (HashMap) client.execute("EndpointSetLocalSTUNCredentials", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public boolean EndpointSetRemoteSTUNCredentials(Integer sessId,Integer endpointId,MediaType media,String username,String pwd) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,endpointId,media.valueOf(),username,pwd};
+        //Execute
+        HashMap response = (HashMap) client.execute("EndpointSetRemoteSTUNCredentials", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public boolean EndpointSetLocalCryptoSDES(Integer sessId,Integer endpointId,MediaType media,String suite,String key) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,endpointId,media.valueOf(),suite,key};
+        //Execute
+        HashMap response = (HashMap) client.execute("EndpointSetLocalCryptoSDES", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public boolean EndpointSetRemoteCryptoSDES(Integer sessId,Integer endpointId,MediaType media,String suite,String key) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,endpointId,media.valueOf(),suite,key};
+        //Execute
+        HashMap response = (HashMap) client.execute("EndpointSetRemoteCryptoSDES", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public boolean EndpointSetRTPProperties(Integer sessId,Integer endpointId,MediaType media, HashMap<String,String> properties) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,endpointId,media.valueOf(),properties};
+        //Execute
+        HashMap response = (HashMap) client.execute("EndpointSetRTPProperties", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
     public boolean EndpointStartSending(int sessId,int endpointId,Codecs.MediaType media,String sendIp,int sendPort,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
     {
         //Create request
@@ -362,6 +411,16 @@ public class XmlRPCJSR309Client {
         Object[] request = new Object[]{sessId,endpointId,mixerId,portId};
         //Execute
         HashMap response = (HashMap) client.execute("EndpointAttachToVideoMixerPort", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public boolean EndpointAttachToVideoTranscoder(int sessId,int endpointId,int videoTranscodeId) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,endpointId,videoTranscodeId};
+        //Execute
+        HashMap response = (HashMap) client.execute("EndpointAttachToVideoTranscoder", request);
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }
@@ -622,6 +681,58 @@ public class XmlRPCJSR309Client {
         Object[] request = new Object[]{sessId,mixerId,mosaicId,portId};
         //Execute
         HashMap response = (HashMap) client.execute("VideoMixerMosaicRemovePort", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public Integer VideoTranscoderCreate(int sessId,String tag) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,tag};
+        //Execute
+        HashMap response = (HashMap) client.execute("VideoTranscoderCreate", request);
+        //Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+        //Return part id
+        return (Integer)returnVal[0];
+    }
+
+    public boolean VideoTranscoderDelete(int sessId,int videoTranscoderId) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{videoTranscoderId};
+        //Execute
+        HashMap response = (HashMap) client.execute("VideoTranscoderDelete", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public boolean VideoTranscoderSetCodec(int sessId,int videoTranscoderId,Integer codec,int size,int fps,int bitrate,int intraPeriod) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,videoTranscoderId,codec,size,fps,bitrate,intraPeriod};
+        //Execute
+        HashMap response = (HashMap) client.execute("VideoTranscoderSetCodec", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public boolean VideoTranscoderAttachToEndpoint(int sessId,int videoTranscoderId,int endpointId) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,videoTranscoderId,endpointId};
+        //Execute
+        HashMap response = (HashMap) client.execute("VideoTranscoderAttachToEndpoint", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+    
+    public boolean VideoTranscoderDettach(int sessId,int videoTranscoderId) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,videoTranscoderId};
+        //Execute
+        HashMap response = (HashMap) client.execute("VideoTranscoderDettach", request);
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }

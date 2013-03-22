@@ -266,7 +266,7 @@ public class XmlRpcMcuClient {
         //Execute 
         HashMap response = (HashMap) client.execute("SetCompositionType", request);
         //Return 
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
     
     public boolean SetMosaicSlot(Integer confId,Integer mosaicId,Integer num,Integer id) throws XmlRpcException
@@ -276,7 +276,7 @@ public class XmlRpcMcuClient {
         //Execute 
         HashMap response = (HashMap) client.execute("SetMosaicSlot", request);
         //Return 
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean AddMosaicParticipant(Integer confId,Integer mosaicId,Integer partId) throws XmlRpcException
@@ -286,7 +286,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("AddMosaicParticipant", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean RemoveMosaicParticipant(Integer confId,Integer mosaicId,Integer partId) throws XmlRpcException
@@ -296,7 +296,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("RemoveMosaicParticipant", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean AddSidebarParticipant(Integer confId,Integer sidebarId,Integer partId) throws XmlRpcException
@@ -306,7 +306,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("AddSidebarParticipant", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean RemoveSidebarParticipant(Integer confId,Integer sidebarId,Integer partId) throws XmlRpcException
@@ -316,7 +316,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("RemoveSidebarParticipant", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
      public boolean SetLocalSTUNCredentials(Integer confId,Integer partId,MediaType media,String username,String pwd) throws XmlRpcException
@@ -326,7 +326,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("SetLocalSTUNCredentials", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
      
     public boolean SetRemoteSTUNCredentials(Integer confId,Integer partId,MediaType media,String username,String pwd) throws XmlRpcException
@@ -336,7 +336,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("SetRemoteSTUNCredentials", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
 
@@ -347,7 +347,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("SetLocalCryptoSDES", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean SetRemoteCryptoSDES(Integer confId,Integer partId,MediaType media,String suite,String key) throws XmlRpcException
@@ -357,7 +357,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("SetRemoteCryptoSDES", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean SetRTPProperties(Integer confId,Integer partId,MediaType media, HashMap<String,String> properties) throws XmlRpcException
@@ -367,7 +367,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("SetRTPProperties", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean StartSending(Integer confId,Integer partId,MediaType media,String sendIp,Integer sendPort,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
@@ -377,7 +377,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("StartSending", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean StopSending(Integer confId,Integer partId,MediaType media) throws XmlRpcException
@@ -387,7 +387,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("StopSending", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public Integer StartReceiving(Integer confId,Integer partId,MediaType media,HashMap<Integer,Integer> rtpMap) throws XmlRpcException
@@ -409,7 +409,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("StopReceiving", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     //Video
@@ -420,7 +420,7 @@ public class XmlRpcMcuClient {
         //Execute 
         HashMap response = (HashMap) client.execute("SetVideoCodec", request);
         //Return 
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     //Audio
@@ -431,7 +431,7 @@ public class XmlRpcMcuClient {
         //Execute 
         HashMap response = (HashMap) client.execute("SetAudioCodec", request);
         //Return 
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
             
     //Text
@@ -442,7 +442,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("SetTextCodec", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean DeleteParticipant(Integer confId,Integer partId) throws XmlRpcException
@@ -452,7 +452,7 @@ public class XmlRpcMcuClient {
         //Execute 
         HashMap response = (HashMap) client.execute("DeleteParticipant", request);
         //Return 
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean StartBroadcaster(Integer confId) throws XmlRpcException
@@ -462,7 +462,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("StartBroadcaster", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean StopBroadcaster(Integer confId) throws XmlRpcException
@@ -472,7 +472,7 @@ public class XmlRpcMcuClient {
         //Execute 
         HashMap response = (HashMap) client.execute("StopBroadcaster", request);
         //Return 
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public Integer StartPublishing(Integer confId,String server,Integer port,String app,String stream) throws XmlRpcException
@@ -494,7 +494,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("StopPublishing", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
     
     public boolean DeleteConference(Integer confId) throws XmlRpcException
@@ -504,7 +504,7 @@ public class XmlRpcMcuClient {
         //Execute 
         HashMap response = (HashMap) client.execute("DeleteConference", request);
         //Return 
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public void AddConferencetToken(Integer confId,String token) throws XmlRpcException
@@ -550,7 +550,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("DeletePlayer", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
     
     public boolean StartPlaying(Integer confId,int playerId,String filename,int loop) throws XmlRpcException
@@ -560,7 +560,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("StartPlaying", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
     public boolean StopPlaying(Integer confId,int playerId) throws XmlRpcException
     {
@@ -569,7 +569,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("StopPlaying", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
     public boolean StartRecordingParticipant(Integer confId,int playerId,String filename) throws XmlRpcException
     {
@@ -578,7 +578,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("StartRecordingParticipant", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean StopRecordingParticipant(Integer confId,int playerId) throws XmlRpcException
@@ -588,7 +588,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("StopRecordingParticipant", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public void SetParticipantMosaic(Integer confId,Integer partId, Integer mosaicId) throws XmlRpcException {
@@ -612,7 +612,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("SetMute", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public boolean SendFPU(Integer confId,int partId) throws XmlRpcException
@@ -622,7 +622,7 @@ public class XmlRpcMcuClient {
         //Execute
         HashMap response = (HashMap) client.execute("SendFPU", request);
         //Return
-        return true;
+        return (((Integer)response.get("returnCode"))==1);
     }
 
     public Map<String,MediaStatistics> getParticipantStatistics(Integer confId, Integer partId) throws XmlRpcException {
