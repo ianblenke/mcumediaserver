@@ -53,6 +53,7 @@ public class Codecs {
         }
         
     }
+
     public static final Integer PCMU    = 0;
     public static final Integer PCMA    = 8;
     public static final Integer GSM     = 3;
@@ -77,6 +78,8 @@ public class Codecs {
 
     public static final Integer T140RED      = 105;
     public static final Integer T140         = 106;
+
+    public static final Integer MaxH264SupportedProfile = 77;
 
     /*public static CodecInfo getCodecInfoForname(String name)
     {
@@ -123,7 +126,7 @@ public class Codecs {
             if (name.equalsIgnoreCase("H263"))        return H263_1996;
             if (name.equalsIgnoreCase("H263-1998"))   return H263_1998;
             if (name.equalsIgnoreCase("H263-2000"))   return H263_1998;
-            if (name.equalsIgnoreCase("MP4V"))        return MPEG4;
+            if (name.equalsIgnoreCase("MP4V-ES"))     return MPEG4;
             if (name.equalsIgnoreCase("H264"))        return H264;
             if (name.equalsIgnoreCase("SORENSON"))    return SORENSON;
             if (name.equalsIgnoreCase("VP8"))         return VP8;
@@ -158,7 +161,7 @@ public class Codecs {
         {
             if (codec==H263_1996)  return "H263";
             if (codec==H263_1998)  return "H263-1998";
-            if (codec==MPEG4)      return "MP4V";
+            if (codec==MPEG4)      return "MP4V-ES";
             if (codec==H264)       return "H264";
             if (codec==SORENSON)   return "SORENSON";
             if (codec==VP8)        return "VP8";

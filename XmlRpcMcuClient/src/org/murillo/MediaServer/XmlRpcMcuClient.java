@@ -423,6 +423,17 @@ public class XmlRpcMcuClient {
         return (((Integer)response.get("returnCode"))==1);
     }
 
+     //Video
+    public boolean SetVideoCodec(Integer confId,Integer partId,Integer codec,Integer mode,Integer fps,Integer bitrate,Integer intraPeriod, HashMap<String,String> params) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,partId,codec,mode,fps,bitrate,intraPeriod,params};
+        //Execute
+        HashMap response = (HashMap) client.execute("SetVideoCodec", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
     //Audio
     public boolean SetAudioCodec(Integer confId,Integer partId,Integer codec) throws XmlRpcException
     {
