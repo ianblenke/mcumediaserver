@@ -44,7 +44,6 @@ function removeConfTemplate(uid)
 	    <th>Media IP</th>
 	    <th>Local Net</th>
 	    <th>Public IP</th>
-            <th>Status</th>
             <th>Actions</th>
         </tr>
         <%
@@ -62,7 +61,6 @@ function removeConfTemplate(uid)
 	    <td><%=mm.getIp()%></td>
 	    <td><%=mm.getLocalNet()%></td>
 	    <td><%=mm.getPublicIp()%></td>
-            <td><%=mm.getState()%></td>
             <td><a href="#" onClick="removeMixer('<%=mm.getUID()%>');return false;"><img src="icons/bin_closed.png"><span>Remove mixer</span></a></td>
         </tr><%
         }

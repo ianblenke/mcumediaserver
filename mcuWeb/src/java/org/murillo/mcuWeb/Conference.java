@@ -124,6 +124,7 @@ public class Conference implements Participant.Listener {
         addSupportedCodec("video", Codecs.VP8);
         addSupportedCodec("video", Codecs.H263_1998);
         addSupportedCodec("video", Codecs.H263_1996);
+        addSupportedCodec("video", Codecs.MPEG4);
         addSupportedCodec("video", Codecs.RED);
         addSupportedCodec("video", Codecs.ULPFEC);
         //Enable all text codecs

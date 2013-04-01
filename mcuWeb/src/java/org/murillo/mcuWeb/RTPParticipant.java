@@ -629,8 +629,8 @@ public class RTPParticipant extends Participant {
                     //Append fmt
                     md.addFormat(fmt);
                     if (codec!=Codecs.OPUS)
-                    //Add rtmpmap
-                    md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec));
+                        //Add rtmpmap
+                        md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec));
                     else
                         //Add rtmpmap
                         md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec),"2");
@@ -987,7 +987,7 @@ public class RTPParticipant extends Participant {
                         //Skip this one
                         continue;
                 //Get the media type
-                    String codecName = rtpMap.getName();
+                String codecName = rtpMap.getName();
                 //Get codec for name
                 Integer codec = Codecs.getCodecForName(media,codecName);
                 //if it is h264 TODO: FIIIIX!!!
