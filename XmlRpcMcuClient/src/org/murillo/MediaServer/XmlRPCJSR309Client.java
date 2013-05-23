@@ -716,6 +716,15 @@ public class XmlRPCJSR309Client {
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }
+    
+    public boolean VideoTranscoderFPU(Integer sessId, Integer videoTranscoderId) throws XmlRpcException {
+        //Create request
+        Object[] request = new Object[]{sessId,videoTranscoderId};
+        //Execute
+        HashMap response = (HashMap) client.execute("VideoTranscoderFPU", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
 
     public boolean VideoTranscoderAttachToEndpoint(int sessId,int videoTranscoderId,int endpointId) throws XmlRpcException
     {
