@@ -78,6 +78,8 @@ public class Conference implements Participant.Listener {
     protected HashSet<Listener> listeners;
     protected HashMap<String,List<Integer>> supportedCodecs = null;
 
+    private static final Logger logger =  Logger.getLogger(ConferenceMngr.class.getName());
+
     /** Creates a new instance of Conference */
     public Conference(SipFactory sf,String name,String did,MediaMixer mixer,Integer size,Integer compType,Integer vad, Profile profile,Boolean isAdHoc) throws XmlRpcException {
         //Create the client
@@ -171,7 +173,7 @@ public class Conference implements Participant.Listener {
             //Disconnect
             part.end();
             } catch (Exception ex) {
-                 Logger.getLogger("global").log(Level.SEVERE, "Error ending or destroying participant on conference destroy", ex);
+                 logger.log(Level.SEVERE, "Error ending or destroying participant on conference destroy", ex);
         }
         }
 
@@ -179,14 +181,14 @@ public class Conference implements Participant.Listener {
             //Stop broadcast
             client.StopBroadcaster(id);
         } catch (Exception ex) {
-           Logger.getLogger("global").log(Level.SEVERE, "Error StopBroadcaster on conference destroy", ex);
+           logger.log(Level.SEVERE, "Error StopBroadcaster on conference destroy", ex);
         }
 
         try {
             //Remove conference
             client.DeleteConference(id);
         } catch (Exception ex) {
-           Logger.getLogger("global").log(Level.SEVERE, "Error deleting conference on destroy", ex);
+            logger.log(Level.SEVERE, "Error deleting conference on destroy", ex);
         }
         //launch event
         fireOnConferenceEnded();
@@ -314,7 +316,7 @@ public class Conference implements Participant.Listener {
             //Set slot
             slots[num] = partId;
         } catch (XmlRpcException ex) {
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
         }
     }
 
@@ -323,7 +325,7 @@ public class Conference implements Participant.Listener {
             //Add participant to mosaic
             client.AddMosaicParticipant(id, mosaicId, partId);
         } catch (XmlRpcException ex) {
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
         }
     }
 
@@ -332,7 +334,7 @@ public class Conference implements Participant.Listener {
             //Remove participant from mosaic
             client.RemoveMosaicParticipant(id, mosaicId, partId);
         } catch (XmlRpcException ex) {
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
         }
     }
     public Integer[] getMosaicSlots() {
@@ -375,8 +377,8 @@ public class Conference implements Participant.Listener {
             fireOnParticipantCreated(part);
             //Set listener
             part.setListener(this);
-        } catch (XmlRpcException ex) {
-            Logger.getLogger("global").log(Level.SEVERE, "Failed to create participant: {0}", ex.getMessage());
+        } catch (Exception ex) {
+            logger.log(Level.SEVERE, "Failed to create participant: {0}", ex.getMessage());
         }
         return part;
     }
@@ -387,7 +389,7 @@ public class Conference implements Participant.Listener {
             return client.CreateMosaic(id, compType, size);
         } catch (XmlRpcException ex) {
             //Log
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
             //Error
             return -1;
         }
@@ -399,7 +401,7 @@ public class Conference implements Participant.Listener {
             return client.SetMosaicOverlayImage(id, mosaicId, fileName);
         } catch (XmlRpcException ex) {
             //Log
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, "failed to send MCU setMosaicOverlayImage", ex);
+            logger.log(Level.SEVERE, "failed to send MCU setMosaicOverlayImage", ex);
             //Exit
             return false;
         }
@@ -410,7 +412,7 @@ public class Conference implements Participant.Listener {
             return client.ResetMosaicOverlay(id, mosaicId);
         } catch (XmlRpcException ex) {
             //Log
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, "failed to send MCU ResetMosaicOverlay", ex);
+            logger.log(Level.SEVERE, "failed to send MCU ResetMosaicOverlay", ex);
             //exit
             return false;
         }
@@ -421,7 +423,7 @@ public class Conference implements Participant.Listener {
             return client.DeleteMosaic(id, mosaicId);
         } catch (XmlRpcException ex) {
             //Log
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, "failed to send MCU DeleteMosaic", ex);
+            logger.log(Level.SEVERE, "failed to send MCU DeleteMosaic", ex);
             //Error
             return false;
         }
@@ -501,7 +503,7 @@ public class Conference implements Participant.Listener {
             //Set mosaic size
             setSize(size);
         } catch (XmlRpcException ex) {
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
         }
     }
 
@@ -512,7 +514,7 @@ public class Conference implements Participant.Listener {
             //Add token
             client.AddConferencetToken(id, token);
          } catch (XmlRpcException ex) {
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
         }
         //Add token playback url
         return new RTMPUrl("rtmp://"+mixer.getPublicIp()+"/mcu/"+id,"watcher/"+token);
@@ -547,7 +549,7 @@ public class Conference implements Participant.Listener {
             //Return participant
             return part;
         } catch (Exception ex) {
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, "ERROR calling participant", ex);
         }
         //Return participant
         return null;
@@ -557,7 +559,7 @@ public class Conference implements Participant.Listener {
         //Get participant
         Participant part = getParticipant(partId);
         //Log
-        Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, "removing participant partId={0} partName={1}", new Object[]{partId, part.getName()});
+        logger.log(Level.SEVERE, "removing participant partId={0} partName={1}", new Object[]{partId, part.getName()});
         //End it
         part.end();
     }
@@ -567,7 +569,7 @@ public class Conference implements Participant.Listener {
             //Get them
             return client.getParticipantStatistics(id, partId);
         } catch (XmlRpcException ex) {
-            Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
             return null;
         }
     }

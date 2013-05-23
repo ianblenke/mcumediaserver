@@ -26,8 +26,10 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -108,6 +110,16 @@ public class RTPParticipant extends Participant {
     private HashMap<String,ICEInfo> localICEInfo;
     private HashMap<String,ICEInfo> remoteICEInfo;
     private HashMap<String,HashMap<String,String>> rtpMediaProperties;
+    private boolean sessionTimersEnabled;
+    private boolean timerSupported;
+    private Integer sessionExpires;
+    private Date lastSessionRefresh;
+    private SipURI proxy;
+    private boolean useInfo;
+    private boolean useUpdate;
+
+    public static final String ALLOWED = "INVITE, CANCEL, UPDATE, INFO, OPTIONS, BYE";
+
 
     private static class CryptoInfo
     {
@@ -208,10 +220,18 @@ public class RTPParticipant extends Participant {
         //Set default level and packetization
         h264profileLevelId = "";
         h264packetization = 0;
+        //Enable session refresh support
+        sessionTimersEnabled = true;
+        //Session refresh supported by both peers
+        timerSupported = false;
+        sessionExpires = 0;
         //Not secure by default
         isSecure = false;
         //Not using ice by default
         useICE = false;
+        //Do no use info or update if not allowed explicitally
+        useInfo = false;
+        useUpdate = false;
         //Create crypto info maps
         localCryptoInfo = new HashMap<String, CryptoInfo>();
         remoteCryptoInfo = new HashMap<String, CryptoInfo>();
@@ -406,6 +426,18 @@ public class RTPParticipant extends Participant {
         this.location = location;
     }
 
+    public void setIsSecure(Boolean isSecure) {
+        this.isSecure = isSecure;
+    }
+
+    public void setUseICE(boolean useICE) {
+        this.useICE = useICE;
+    }
+
+    public void setRtcpFeedBack(Boolean rtcpFeedBack) {
+        this.rtcpFeedBack = rtcpFeedBack;
+    }
+
     @Override
     public boolean setVideoProfile(Profile profile) {
         //Check video is supported
@@ -430,8 +462,14 @@ public class RTPParticipant extends Participant {
                 if (videoBitrate>0 && videoBitrate<bitrate)
                         //Reduce it
                         bitrate = videoBitrate;
+                //Create specific codec paraemter
+                HashMap<String,String> params = new HashMap<String, String>();
+                //Check codec
+                if (getVideoCodec()==Codecs.H264)
+                    //Add profile level id
+                    params.put("h264.profile-level-id", h264profileLevelId.toString());
                 //Setup video with new profile
-                client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize(), profile.getVideoFPS(), bitrate, 0, 0, profile.getIntraPeriod());
+                client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize(), profile.getVideoFPS(), bitrate,  profile.getIntraPeriod(), params);
                 //Send video & audio
                 client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
             }
@@ -464,6 +502,10 @@ public class RTPParticipant extends Participant {
         sdp.setConnection("IN", "IP4", getRecIp());
         //Set time
         sdp.addTime(0,0);
+        //Using ice?
+        if (useICE)
+                //Add ice lite attribute
+                sdp.addAttribute("ice-lite");
         //Check if supported
         if (audioSupported)
             //Add audio related lines to the sdp
@@ -576,8 +618,6 @@ public class RTPParticipant extends Participant {
             //If ge have it
             if (info!=null)
             {
-                //Add ice lite attribute
-                md.addAttribute("ice-lite");
                 //Set credentials
                 md.addAttribute("ice-ufrag",info.ufrag);
                 md.addAttribute("ice-pwd",info.pwd);
@@ -663,6 +703,12 @@ public class RTPParticipant extends Participant {
                             //Add redundancy fmt
                             md.addFormatAttribute(fmt,t140 + "/" + t140 + "/" + t140);
                     }
+                    //Add rtcp-fb nack support for all payload types
+                    md.addAttribute("rtcp-fb", fmt+" nack");
+                    //Add rtcp-fb fir/pli only for video codecs
+                    if (mediaName.equals("video") && codec!=Codecs.RED  && codec!=Codecs.ULPFEC)
+                        //Add fir
+                        md.addAttribute("rtcp-fb", fmt+" ccm fir");
                 }
             }
         }
@@ -704,7 +750,7 @@ public class RTPParticipant extends Participant {
                     //Get body type
                     String bodyType = bodyPart.getContentType();
                     //Check type
-                    if (bodyType.equals("application/sdp"))
+                    if (bodyType.equalsIgnoreCase("application/sdp"))
                     {
                         //Get input stream
                         InputStream inputStream = bodyPart.getInputStream();
@@ -714,7 +760,7 @@ public class RTPParticipant extends Participant {
                         inputStream.read(arr, 0, inputStream.available());
                         //Set length
                         sdp = new String(arr);
-                    } else if (bodyType.equals("application/pidf+xml")) {
+                    } else if (bodyType.equalsIgnoreCase("application/pidf+xml")) {
                         //Get input stream
                         InputStream inputStream = bodyPart.getInputStream();
                         //Create array
@@ -1016,6 +1062,9 @@ public class RTPParticipant extends Participant {
                                 if (ftmpLine.indexOf("packetization-mode=1")!=-1)
                                     //Set it
                                     h264packetization = 1;
+                                else
+                                    //Unset it
+                                    h264packetization = 0;
                             }
                     } else {
                         //check if no profile has been received so far
@@ -1211,6 +1260,51 @@ public class RTPParticipant extends Participant {
     }
 
     public void onInviteRequest(SipServletRequest request) throws IOException {
+        //If it session timers are enabled
+        if (sessionTimersEnabled)
+        {
+            //RFC 4208 Session Timers
+            //   If the incoming request contains a Supported header field with a
+            //   value 'timer' but does not contain a Session-Expires header, it means
+            //   that the UAS is indicating support for timers but is not requesting
+            //   one.
+
+            //Get supported
+            ListIterator<String> supported = request.getHeaders("Supported");
+            //Check if timer found
+            while(supported.hasNext() && !timerSupported)
+            {
+                //parse supported list
+                StringTokenizer tokenizer = new StringTokenizer(supported.next(), ",");
+                //Check each one
+                while (tokenizer.hasMoreTokens())
+                {
+                    //Check if found
+                    if ("timer".equals(tokenizer.nextToken()))
+                    {
+                        //If it is
+                        timerSupported = true;
+                        //Exit
+                        break;
+                    }
+                }
+            }
+            //Get expire header
+            String sessionExpiresHeader = request.getHeader("Session-Expires");
+            //If found
+            if (sessionExpiresHeader!=null)
+                //Parse
+                sessionExpires = Integer.parseInt(sessionExpiresHeader);
+        }
+        //Get allow header
+        String allowHeader = request.getHeader("Allow");
+        //Check if found
+        if (allowHeader!=null)
+        {
+            //Check if update is supported
+            useInfo     = allowHeader.contains("INFO");
+            useUpdate   = allowHeader.contains("UPDATE");
+        }
         //Store address
         address = request.getFrom();
         //Get name
@@ -1248,6 +1342,82 @@ public class RTPParticipant extends Participant {
             accept();
     }
 
+    public void onUpdatesRequest(SipServletRequest request) throws IOException
+    {
+         //Update target
+        session = request.getSession();
+        //Set attribute
+        session.setAttribute("user", this);
+        //Do not invalidate
+        session.setInvalidateWhenReady(false);
+        //RFC 4208 Session Timers
+        //   If the incoming request contains a Supported header field with a
+        //   value 'timer' but does not contain a Session-Expires header, it means
+        //   that the UAS is indicating support for timers but is not requesting
+        //   one.
+        //Get expire header
+        String sessionExpiresHeader = inviteRequest.getHeader("Session-Expires");
+        //If found
+        if (sessionExpiresHeader!=null)
+        {
+            //Parse the expire time
+            String expire = sessionExpiresHeader;
+            //Find delimiter
+            int i = sessionExpiresHeader.indexOf(';');
+            //If it contains the ;refresher=uas
+            if (i!=-1)
+                //Remove it
+                expire = expire.substring(0, i);
+            //Parse
+            sessionExpires = Integer.parseInt(expire);
+        }
+        //Update expire time
+        lastSessionRefresh = new Date();
+        //Create response
+        SipServletResponse resp = request.createResponse(200, "OK");
+        //Check session refresh request
+        if (timerSupported && sessionExpires>0)
+        {
+            //RFC 4208 Session Timers
+            //    If the UAS wishes to accept the request, it copies the value of the
+            //    Session-Expires header field from the request into the 2xx response.
+            resp.addHeader("Session-expires", sessionExpires.toString()+";refresher=uac");
+            //Add require and supported
+            resp.addHeader("Supported","timer");
+            resp.addHeader("Require","timer");
+        }
+        //add allowed header
+        resp.addHeader("Allow", ALLOWED);
+        //Get content
+        byte[] body = (byte[])request.getContent();
+        //Check body and type
+        if (body!=null && request.getContentType().equalsIgnoreCase("application/sdp"))
+        {
+            SessionDescription sdp;
+
+            try {
+                //Parse conent
+                sdp = SessionDescription.Parse(new String(body));
+            } catch (ParserException ex) {
+                //Log
+                Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
+                //Not supported yet
+                request.createResponse(500, "SDP error"+ex.getReason()).send();
+                //Exit
+                return;
+            }
+
+            //Check version
+            if (!sdp.getOrigin().getSessVersion().equals(remoteSDP.getOrigin().getSessVersion()))
+                //Log error but accept
+                Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE,"SDP update not supported yet");
+            //Resend sdp
+            resp.setContent(localSDP.toString(),"application/sdp");
+        }
+        //Send it
+        resp.send();
+    }
+
     @Override
     public boolean accept() {
         //Check state
@@ -1264,6 +1434,21 @@ public class RTPParticipant extends Participant {
             startReceiving();
             //Create final response
             SipServletResponse resp = inviteRequest.createResponse(200, "Ok");
+            //Add custom header with conf id
+            resp.addHeader("X-Conference-ID", conf.getUID());
+            //Check session refresh request
+            if (timerSupported && sessionExpires>0)
+            {
+                //RFC 4208 Session Timers
+                //    If the UAS wishes to accept the request, it copies the value of the
+                //    Session-Expires header field from the request into the 2xx response.
+                resp.addHeader("Session-expires", sessionExpires.toString()+";refresher=uac");
+                //Add require and supported
+                resp.addHeader("Supported","timer");
+                resp.addHeader("Require","timer");
+                //Set last session refresh
+                lastSessionRefresh = new Date();
+            }
             //Create local SDP
             localSDP = createSDP();
             //If also have remote SDP on the previoues INVITE
@@ -1334,81 +1519,97 @@ public class RTPParticipant extends Participant {
     }
 
     void doInvite(SipFactory sf, Address from,Address to,SipURI proxy,int timeout,String location) throws IOException, XmlRpcException {
-        //Store to as participant address
-        address = to;
-        //Start receiving media
-        startReceiving();
-        //Create the application session
-        appSession = sf.createApplicationSession();
-        // create an INVITE request to the first party from the second
-        inviteRequest = sf.createRequest(appSession, "INVITE", from, to);
-        //Check if we have a proxy
-        if (proxy!=null)
-            //Set proxy
-            inviteRequest.pushRoute(proxy);
-        //Get call id
-        setSessionId(inviteRequest.getCallId());
-        //Get sip session
-        session = inviteRequest.getSession();
-        //Set reference in sessions
-        appSession.setAttribute("user", this);
-        session.setAttribute("user", this);
-        //Do not invalidate
-        appSession.setInvalidateWhenReady(false);
-        session.setInvalidateWhenReady(false);
-        //Set expire time
-        appSession.setExpires(timeout);
-        //Create sdp
-        localSDP = createSDP();
-        //Convert to
-        String sdp = localSDP.toString();
-        //If it has location info
-        if (location!=null && !location.isEmpty())
+        try
         {
-            try {
+            //Store to as participant address
+            address = to;
+            //Start receiving media
+            startReceiving();
+            //Create the application session
+            appSession = sf.createApplicationSession();
+            // create an INVITE request to the first party from the second
+            inviteRequest = sf.createRequest(appSession, "INVITE", from, to);
+                //Add custom header with conf id
+                inviteRequest.addHeader("X-Conference-ID", conf.getUID());
+            //Check if we have a proxy
+            if (proxy!=null)
+                //Set proxy
+                inviteRequest.pushRoute(proxy);
+                //Check if we should use session timers on onging request
+                if (sessionTimersEnabled)
+                {
+                    //Add support for session refresh
+                    inviteRequest.addHeader("Supported","timer");
+                    //Request refresh each 5 minutes
+                    inviteRequest.addHeader("Session-expires", "300;refresher=uas");
+                }
+                //add allowed header
+                inviteRequest.addHeader("Allow", ALLOWED);
+            //Get call id
+            setSessionId(inviteRequest.getCallId());
+            //Get sip session
+            session = inviteRequest.getSession();
+            //Set reference in sessions
+            appSession.setAttribute("user", this);
+            session.setAttribute("user", this);
+            //Do not invalidate
+            appSession.setInvalidateWhenReady(false);
+            session.setInvalidateWhenReady(false);
+            //Set expire time
+            appSession.setExpires(timeout);
+            //Create sdp
+            localSDP = createSDP();
+            //Convert to
+            String sdp = localSDP.toString();
+            //If it has location info
+            if (location!=null && !location.isEmpty())
+            {
+                try {
 
-                //Get SIP uri of calling user
-                SipURI uri = (SipURI)from.getURI();
-                //Add location header
-                inviteRequest.addHeader("Geolocation","<cid:"+uri.getUser()+"@"+uri.getHost()+">;routing-allowed=yes");
-                inviteRequest.addHeader("Geolocation-Routing","yes");
-                //Create multipart body
-                Multipart body = new MimeMultipart();
-                //Create sdp body
-                BodyPart sdpPart = new MimeBodyPart();
-                //Set content
-                sdpPart.setContent(sdp, "application/sdp");
-                //Set content headers
-                sdpPart.setHeader("Content-Type","application/sdp");
-                sdpPart.setHeader("Content-Length", Integer.toString(sdp.length()));
-                //Add sdp
-                body.addBodyPart(sdpPart);
-                //Create slocation body
-                BodyPart locationPart = new MimeBodyPart();
-                //Set content
-                locationPart.setContent(location, "application/pidf+xml");
-                //Set content headers
-                locationPart.setHeader("Content-Type","application/pidf+xml");
-                locationPart.setHeader("Content-ID","<"+uri.getUser()+"@"+uri.getHost()+">");
-                locationPart.setHeader("Content-Length", Integer.toString(location.length()));
-                //Add sdp
-                body.addBodyPart(locationPart);
-                //Add content
-                inviteRequest.setContent(body, body.getContentType().replace(" \r\n\t",""));
-            } catch (MessagingException ex) {
-                Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
+                    //Get SIP uri of calling user
+                    SipURI uri = (SipURI)from.getURI();
+                    //Add location header
+                    inviteRequest.addHeader("Geolocation","<cid:"+uri.getUser()+"@"+uri.getHost()+">;routing-allowed=yes");
+                    inviteRequest.addHeader("Geolocation-Routing","yes");
+                    //Create multipart body
+                    Multipart body = new MimeMultipart();
+                    //Create sdp body
+                    BodyPart sdpPart = new MimeBodyPart();
+                    //Set content
+                    sdpPart.setContent(sdp, "application/sdp");
+                    //Set content headers
+                    sdpPart.setHeader("Content-Type","application/sdp");
+                    sdpPart.setHeader("Content-Length", Integer.toString(sdp.length()));
+                    //Add sdp
+                    body.addBodyPart(sdpPart);
+                    //Create slocation body
+                    BodyPart locationPart = new MimeBodyPart();
+                    //Set content
+                    locationPart.setContent(location, "application/pidf+xml");
+                    //Set content headers
+                    locationPart.setHeader("Content-Type","application/pidf+xml");
+                    locationPart.setHeader("Content-ID","<"+uri.getUser()+"@"+uri.getHost()+">");
+                    locationPart.setHeader("Content-Length", Integer.toString(location.length()));
+                    //Add sdp
+                    body.addBodyPart(locationPart);
+                    //Add content
+                    inviteRequest.setContent(body, body.getContentType().replace(" \r\n\t",""));
+                } catch (MessagingException ex) {
+                    Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            } else {
+                //Attach body
+                inviteRequest.setContent(sdp,"application/sdp");
             }
-        } else {
-            //Attach body
-            inviteRequest.setContent(sdp,"application/sdp");
+            //Set state
+            setState(State.CONNECTING);
+            //Send it
+            inviteRequest.send();
+            //Log
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "doInvite [idSession:{0}]",new Object[]{session.getId()});
+       } catch (IOException ex) {
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, "Error doInvite", ex);
         }
-        //Send it
-        inviteRequest.send();
-        //Log
-        Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "doInvite [idSession:{0}]",new Object[]{session.getId()});
-        //Set state
-        setState(State.CONNECTING);
-        //Check cdr
     }
 
     public void onInviteResponse(SipServletResponse resp) throws IOException {
@@ -1433,8 +1634,50 @@ public class RTPParticipant extends Participant {
                     //DO nothing
             }
         } else if (code >= 200 && code < 300) {
+            //Get supported
+            ListIterator<String> supported = resp.getHeaders("Supported");
+            //Check if timer found
+            while(supported.hasNext() && !timerSupported)
+            {
+                //parse supported list
+                StringTokenizer tokenizer = new StringTokenizer(supported.next(), ",");
+                //Check each one
+                while (tokenizer.hasMoreTokens())
+                {
+                    //Check if found
+                    if ("timer".equals(tokenizer.nextToken()))
+                    {
+                        //If it is
+                        timerSupported = true;
+                        //Exit
+                        break;
+                    }
+                }
+            }
+            //Get expire header
+            String sessionExpiresHeader = resp.getHeader("Session-Expires");
+            //If found
+            if (sessionExpiresHeader!=null)
+            {
+                //Parse the expire time
+                String expire = sessionExpiresHeader;
+                //Find delimiter
+                int i = sessionExpiresHeader.indexOf(';');
+                //If it contains the ;refresher=uas
+                if (i!=-1)
+                    //Remove it
+                    expire = expire.substring(0, i);
+                //Parse
+                sessionExpires = Integer.parseInt(expire);
+            }
             //Extend expire time one minute
             appSession.setExpires(1);
+            //Get confirmed session
+            session = resp.getSession();
+            //Set attribute
+            session.setAttribute("user", this);
+            //Do not invalidate
+            session.setInvalidateWhenReady(false);
             //Update name
             address = resp.getTo();
             //Update name
@@ -1463,7 +1706,35 @@ public class RTPParticipant extends Participant {
             }
         } else if (code>=400) {
             //Check code
-            switch (code) {
+            switch (code)
+            {
+                case 422:
+                    //422 Session Timer too small, get min header
+                    String header = resp.getHeader("Min-SE");
+                    //Log
+                    Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "422 Session Timer too small, Min-SE:{0}", header);
+                    //Parse it
+                    Integer minSessionExpires = Integer.parseInt(header);
+                    //Create new request
+                    SipServletRequest reinviteRequest = session.createRequest("INVITE");
+                    //Check if we have a proxy
+                    if (proxy!=null)
+                        //Set proxy
+                        reinviteRequest.pushRoute(proxy);
+                    //Add support for session refresh
+                    reinviteRequest.addHeader("Supported","timer");
+                    //Request refresh each 5 minutes
+                    reinviteRequest.addHeader("Session-expires", minSessionExpires.toString() +";refresher=uas");
+                    //add allowed header
+                    reinviteRequest.addHeader("Allow", ALLOWED);
+                    //Get original content
+                    reinviteRequest.setContent(inviteRequest.getContent(),inviteRequest.getContentType());
+                    //Update request
+                    inviteRequest = reinviteRequest;
+                    //Send it
+                    inviteRequest.send();
+                    //Not change state
+                    break;
                 case 404:
                     //Terminate
                     error(State.NOTFOUND,"NOT_FOUND");
@@ -1487,16 +1758,33 @@ public class RTPParticipant extends Participant {
                     error(State.ERROR,"ERROR",code);
                     break;
             }
+            //Check if the session is still valid
+            if (appSession.isValid())
             //Set expire time
             appSession.setExpires(1);
         }
     }
 
     public void onTimeout() {
+        Logger.getLogger(RTPParticipant.class.getName()).log(Level.INFO, "onTimeout state {0}", state);
         //Check state
         if (state==State.CONNECTED) {
-            //Extend session two minutes
+            //Extend session 1 minutes
             appSession.setExpires(1);
+            //Check session refresh
+            if (sessionExpires>0 && lastSessionRefresh!=null)
+            {
+                //Get time diff
+                Long diff =  new Date().getTime()-lastSessionRefresh.getTime();
+                //check if session has expired
+                if (diff/1000>sessionExpires)
+                {
+                    //Terminate
+                    doBye(true);
+                    //Exit
+                    return;
+                }
+            }
             //Get statiscits
             stats = conf.getParticipantStats(id);
             //Calculate acumulated packets
@@ -1511,7 +1799,7 @@ public class RTPParticipant extends Participant {
                 totalPacketCount = num;
             }  else {
                 //Terminate
-                error(State.TIMEOUT,"TIMEOUT",id);
+                doBye(true);
             }
         } else if (state==State.CONNECTING) {
             //Cancel request
@@ -1564,7 +1852,7 @@ public class RTPParticipant extends Participant {
         destroy();
     }
 
-    void doBye() {
+    void doBye(boolean timeout) {
         try{
             //Create BYE request
             SipServletRequest req = session.createRequest("BYE");
@@ -1581,8 +1869,14 @@ public class RTPParticipant extends Participant {
         } catch (Exception ex) {
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, "Error expiring user", ex);
         }
-        //Disconnect
-        setState(State.DISCONNECTED);
+        //Check which state we have to set
+        if (timeout)
+            //TImeout
+            setState(State.TIMEOUT);
+        else
+            //Disconnect
+            setState(State.DISCONNECTED);
+
         //Terminate
         destroy();
     }
@@ -1618,7 +1912,7 @@ public class RTPParticipant extends Participant {
                 doCancel(false);
                 break;
             case CONNECTED:
-                doBye();
+                doBye(false);
                 break;
             default:
                 //Destroy
@@ -1689,8 +1983,14 @@ public class RTPParticipant extends Participant {
             if (videoBitrate>0 && videoBitrate<bitrate)
                     //Reduce it
                     bitrate = videoBitrate;
+            //Create specific codec paraemter
+            HashMap<String,String> params = new HashMap<String, String>();
+            //Check codec
+            if (getVideoCodec()==Codecs.H264)
+                    //Add profile level id
+                    params.put("h264.profile-level-id", h264profileLevelId.toString());
             //Set codec
-            client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize() , profile.getVideoFPS(), bitrate,0, 0, profile.getIntraPeriod());
+            client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize() , profile.getVideoFPS(), bitrate,profile.getIntraPeriod(),params);
             //Send
             client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
             //Sending Video
@@ -1821,6 +2121,9 @@ public class RTPParticipant extends Participant {
 
     @Override
     void requestFPU() {
+        //If the other side supports INFO request
+        if (useInfo)
+        {
         //Send FPU
         String xml ="<?xml version=\"1.0\" encoding=\"utf-8\" ?>\r\n<media_control>\r\n<vc_primitive>\r\n<to_encoder>\r\n<picture_fast_update></picture_fast_update>\r\n</to_encoder>\r\n</vc_primitive>\r\n</media_control>\r\n";
         try {
@@ -1834,6 +2137,7 @@ public class RTPParticipant extends Participant {
             //Log it
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, "Error while requesting FPU for participant", ex);
         }
+    }
     }
 
     private void onSDPNegotiationDone() throws XmlRpcException {

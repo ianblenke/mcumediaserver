@@ -90,8 +90,17 @@ public class MCUSipServlet extends SipServlet implements SipSessionListener,SipA
         RTPParticipant part = (RTPParticipant) request.getSession().getAttribute("user");
         //Check participant
         if (part!=null)
+        {
             //Handle it
             part.onOptionsRequest(request);
+        } else  {
+            //Create response
+            SipServletResponse response = request.createResponse(200);
+            //Add allowed header
+            response.addHeader("Allow", RTPParticipant.ALLOWED);
+            //Send it
+            response.send();
+    }
     }
 
     @Override
@@ -105,10 +114,27 @@ public class MCUSipServlet extends SipServlet implements SipSessionListener,SipA
             ConferenceMngr confMngr = (ConferenceMngr) context.getAttribute("confMngr");
             //Handle it
             confMngr.onInviteRequest(request);
+        } else {
+            //Get Participant
+            RTPParticipant part = (RTPParticipant) request.getSession().getAttribute("user");
+            //Check participant
+            if (part!=null)
+                //Handle it
+                part.onUpdatesRequest(request);
         }
     }
 
    @Override
+    protected void doUpdate(SipServletRequest request) throws ServletException, IOException {
+        //Get Participant
+        RTPParticipant part = (RTPParticipant) request.getSession().getAttribute("user");
+        //Check participant
+        if (part!=null)
+            //Handle it
+            part.onUpdatesRequest(request);
+    }
+
+    @Override
     protected void doBye(SipServletRequest request) throws ServletException, IOException
     {
         //Get Participant
@@ -161,30 +187,30 @@ public class MCUSipServlet extends SipServlet implements SipSessionListener,SipA
     }
 
     public void sessionCreated(SipSessionEvent event) {
-        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.WARNING, "sessionCreated!");
+        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.FINEST, "sessionCreated! {0}", event.getSession().getId());
     }
 
     public void sessionDestroyed(SipSessionEvent event) {
         //Log it       
-        Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "sessionDestroyed!");
+        Logger.getLogger(this.getClass().getName()).log(Level.FINEST, "sessionDestroyed! {0}", event.getSession().getId());
    }
 
     public void sessionReadyToInvalidate(SipSessionEvent event)
     {
        //Log it
-        Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "sessionReadyToInvalidate!");
+        Logger.getLogger(this.getClass().getName()).log(Level.FINEST, "sessionReadyToInvalidate! {0}", event.getSession().getId());
     }
 
     public void sessionCreated(SipApplicationSessionEvent sase) {
-        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.WARNING, "sessionCreated!");
+        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.FINEST, "appSessionCreated! {0}", sase.getApplicationSession().getId());
     }
 
     public void sessionDestroyed(SipApplicationSessionEvent sase) {
-        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.WARNING, "sessionDestroyed!");
+        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.FINEST, "appSessionDestroyed! {0}", sase.getApplicationSession().getId());
     }
 
     public void sessionExpired(SipApplicationSessionEvent sase) {
-        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.WARNING, "sessionExpired!");
+        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.FINEST, "appSessionExpired! {0}", sase.getApplicationSession().getId());
         //Get application session
         SipApplicationSession applicationSession = sase.getApplicationSession();
         //Get user
@@ -196,6 +222,14 @@ public class MCUSipServlet extends SipServlet implements SipSessionListener,SipA
     }
 
     public void sessionReadyToInvalidate(SipApplicationSessionEvent sase) {
-        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.WARNING, "sessionReadyToInvalidate!");
+        Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.FINEST, "sessionReadyToInvalidate! {0}", sase.getApplicationSession().getId());
+        //Get application session
+        SipApplicationSession applicationSession = sase.getApplicationSession();
+        //Get user
+        RTPParticipant part = (RTPParticipant) applicationSession.getAttribute("user");
+        //Check if we have participant
+        if (part!=null)
+            //Timeout
+            part.onTimeout();
     }
 }
