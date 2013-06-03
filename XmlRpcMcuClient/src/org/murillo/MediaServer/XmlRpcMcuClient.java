@@ -444,6 +444,16 @@ public class XmlRpcMcuClient {
         //Return 
         return (((Integer)response.get("returnCode"))==1);
     }
+
+    public boolean SetAudioCodec(Integer confId,Integer partId,Integer codec,HashMap<String,String> params) throws XmlRpcException
+    {
+       //Create request
+        Object[] request = new Object[]{confId,partId,codec,params};
+        //Execute
+        HashMap response = (HashMap) client.execute("SetAudioCodec", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
             
     //Text
     public boolean SetTextCodec(Integer confId,Integer partId,Integer codec) throws XmlRpcException
