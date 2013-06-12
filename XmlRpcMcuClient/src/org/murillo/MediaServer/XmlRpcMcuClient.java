@@ -592,6 +592,27 @@ public class XmlRpcMcuClient {
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }
+
+    public boolean StartRecordingBroadcaster(Integer confId,String filename) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,filename};
+        //Execute
+        HashMap response = (HashMap) client.execute("StartRecordingBroadcaster", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public boolean StopRecordingBroadcaster(Integer confId) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId};
+        //Execute
+        HashMap response = (HashMap) client.execute("StopRecordingBroadcaster", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
     public boolean StartRecordingParticipant(Integer confId,int playerId,String filename) throws XmlRpcException
     {
         //Create request
