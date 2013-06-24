@@ -167,6 +167,18 @@ public class XmlRpcMcuClient {
     {
         //Create request
         Object[] request = new Object[]{tag,vad,queueId};
+        //Execute
+        HashMap response = (HashMap) client.execute("CreateConference", request);
+        //Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+        //Return conference id
+        return (Integer)returnVal[0];
+    }
+
+    public Integer CreateConference(String tag,Integer vad,Integer rate,Integer queueId) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{tag,vad,rate,queueId};
         //Execute 
         HashMap response = (HashMap) client.execute("CreateConference", request);
         //Get result
