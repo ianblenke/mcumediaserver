@@ -121,6 +121,7 @@ public class Conference implements Participant.Listener {
         addSupportedCodec("audio", Codecs.OPUS);
         addSupportedCodec("audio", Codecs.PCMU);
         addSupportedCodec("audio", Codecs.PCMA);
+        addSupportedCodec("audio", Codecs.G722);
         //Enable all video codecs
         addSupportedCodec("video", Codecs.H264);
         addSupportedCodec("video", Codecs.VP8);
@@ -489,12 +490,12 @@ public class Conference implements Participant.Listener {
             part.setVideoMuted(flag);
         }
 
-    void setCompositionType(Integer compType, Integer size) {
+    public void setCompositionType(Integer compType, Integer size) {
         //Set it with default mosaic
         setCompositionType(XmlRpcMcuClient.DefaultMosaic,compType, size);
     }
 
-    void setCompositionType(Integer mosaicId, Integer compType, Integer size) {
+    public void setCompositionType(Integer mosaicId, Integer compType, Integer size) {
         try {
             //Set composition
             client.SetCompositionType(id, mosaicId, compType, size);

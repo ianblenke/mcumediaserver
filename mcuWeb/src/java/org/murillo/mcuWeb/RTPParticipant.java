@@ -98,7 +98,7 @@ public class RTPParticipant extends Participant {
     private String videoContentType;
     private String h264profileLevelId;
     private Integer h264packetization;
-    private final String h264profileLevelIdDefault = "428014";
+    private final String h264profileLevelIdDefault = "42801F";
     private Integer videoBitrate;
     private SessionDescription remoteSDP;
     private SessionDescription localSDP;
@@ -1260,6 +1260,8 @@ public class RTPParticipant extends Participant {
     }
 
     public void onInviteRequest(SipServletRequest request) throws IOException {
+        //Store invite request
+        inviteRequest = request;
         //If it session timers are enabled
         if (sessionTimersEnabled)
         {
@@ -1270,7 +1272,7 @@ public class RTPParticipant extends Participant {
             //   one.
 
             //Get supported
-            ListIterator<String> supported = request.getHeaders("Supported");
+            ListIterator<String> supported = inviteRequest.getHeaders("Supported");
             //Check if timer found
             while(supported.hasNext() && !timerSupported)
             {
@@ -1290,14 +1292,14 @@ public class RTPParticipant extends Participant {
                 }
             }
             //Get expire header
-            String sessionExpiresHeader = request.getHeader("Session-Expires");
+            String sessionExpiresHeader = inviteRequest.getHeader("Session-Expires");
             //If found
             if (sessionExpiresHeader!=null)
                 //Parse
                 sessionExpires = Integer.parseInt(sessionExpiresHeader);
         }
         //Get allow header
-        String allowHeader = request.getHeader("Allow");
+        String allowHeader = inviteRequest.getHeader("Allow");
         //Check if found
         if (allowHeader!=null)
         {
@@ -1306,20 +1308,20 @@ public class RTPParticipant extends Participant {
             useUpdate   = allowHeader.contains("UPDATE");
         }
         //Store address
-        address = request.getFrom();
+        address = inviteRequest.getFrom();
         //Get name
         name = getUsernameDomain();
         //Get call id
-        setSessionId(request.getCallId());
+        setSessionId(inviteRequest.getCallId());
         //Create ringing
-        SipServletResponse resp = request.createResponse(180, "Ringing");
+        SipServletResponse resp = inviteRequest.createResponse(180, "Ringing");
         //Send it
         resp.send();
         //Set state
         setState(State.WAITING_ACCEPT);
         //Check cdr
         //Get sip session
-        session = request.getSession();
+        session = inviteRequest.getSession();
         //Get sip application session
         appSession = session.getApplicationSession();
         //Set expire time to wait for ACK
@@ -1331,11 +1333,9 @@ public class RTPParticipant extends Participant {
         appSession.setInvalidateWhenReady(false);
         session.setInvalidateWhenReady(false);
         //Check if it has content
-        if (request.getContentLength()>0)
+        if (inviteRequest.getContentLength()>0)
             //Process it
-            proccesContent(request.getContentType(),request.getContent());
-        //Store invite request
-        inviteRequest = request;
+            proccesContent(inviteRequest.getContentType(),inviteRequest.getContent());
         //Check if we need to autoaccapt
         if (isAutoAccept())
             //Accept it
