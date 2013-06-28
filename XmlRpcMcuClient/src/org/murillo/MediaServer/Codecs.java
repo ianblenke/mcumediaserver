@@ -60,7 +60,7 @@ public class Codecs {
     public static final Integer AMR     = 118;
     public static final Integer AMR_WB  = 119;
     public static final Integer G726    = 120;
-    public static final Integer G722    = 121;
+    public static final Integer G722    = 9;
     public static final Integer NELLY11 = 131;
     public static final Integer SPEEX16 = 117;
     public static final Integer OPUS    = 98;
