@@ -63,6 +63,8 @@ public class XmlRpcMcuClient {
     public static final Integer FOURCIF = 12;	// 704  x 576
     public static final Integer FOURSIF = 13;	// 704  x 576
     public static final Integer XGA     = 14;	// 1024 x 768
+    public static final Integer WVGA    = 15;	// 800  x 480
+    public static final Integer DCIF    = 16;	// 528  x  384
     
     public static final Integer MOSAIC1x1   = 0;
     public static final Integer MOSAIC2x2   = 1;
@@ -74,6 +76,7 @@ public class XmlRpcMcuClient {
     public static final Integer MOSAICPIP1  = 7;
     public static final Integer MOSAICPIP3  = 8;
     public static final Integer MOSAIC4x4   = 9;
+    public static final Integer MOSAIC1p4   = 10;
 
     public static final Integer DefaultMosaic = 0;
     public static final Integer DefaultSidebar = 0;
