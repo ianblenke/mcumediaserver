@@ -23,6 +23,8 @@ import java.net.URL;
 import org.apache.xmlrpc.XmlRpcException;
 import org.apache.xmlrpc.client.XmlRpcClientConfigImpl;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import org.murillo.MediaServer.Codecs.MediaType;
 
@@ -292,6 +294,23 @@ public class XmlRpcMcuClient {
         HashMap response = (HashMap) client.execute("SetMosaicSlot", request);
         //Return 
         return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public List<Integer> GetMosaicPositions(Integer confId, Integer mosaicId) throws XmlRpcException {
+        //Create request
+        Object[] request = new Object[]{confId,mosaicId};
+        //Execute
+        HashMap response = (HashMap) client.execute("GetMosaicPositions", request);
+        //Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+        //Create list
+        LinkedList<Integer> positions = new LinkedList<Integer>();
+        //For each value in array
+        for (int i=0;i<returnVal.length;i++)
+            //Get position
+            positions.add((Integer)returnVal[i]);
+        //Return conference id
+        return positions;
     }
 
     public boolean AddMosaicParticipant(Integer confId,Integer mosaicId,Integer partId) throws XmlRpcException
