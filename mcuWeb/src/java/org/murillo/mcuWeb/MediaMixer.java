@@ -57,7 +57,7 @@ public class MediaMixer implements Serializable {
             this.url = url;
         this.ip = ip;
         this.publicIp = publicIp;
-        //Check if it has a last "/"
+        //Create default client
         client = new XmlRpcMcuClient(url + "/mcu");
         //Create client list
         mcuClients = new HashSet<XmlRpcMcuClient>();
@@ -157,33 +157,11 @@ public class MediaMixer implements Serializable {
         sizes.put(XmlRpcMcuClient.FOURCIF,"4CIF");
         sizes.put(XmlRpcMcuClient.FOURSIF,"4SIF");
         sizes.put(XmlRpcMcuClient.XGA,"XGA");
+        sizes.put(XmlRpcMcuClient.WVGA,"WVGA");
+        sizes.put(XmlRpcMcuClient.DCIF,"DCIF");
         //Return map
         return sizes;
     }
-    
-    public static HashMap<Integer,String> getAudioCodecs() {
-        //The map
-        HashMap<Integer,String> codecs = new HashMap<Integer,String>();
-        //Add values
-        codecs.put(Codecs.PCMU,"PCMU");
-        codecs.put(Codecs.PCMA,"PCMA");
-        codecs.put(Codecs.GSM,"GSM");
-        //Return map
-        return codecs;
-    } 
-    
-    public static HashMap<Integer,String> getVideoCodecs() {
-        //The map
-        HashMap<Integer,String> codecs = new HashMap<Integer,String>();
-        //Add values
-        codecs.put(Codecs.H263_1996,"H263-1996");
-        codecs.put(Codecs.H263_1998,"H263-1998");
-        codecs.put(Codecs.H263_1998,"H263-2000");
-        codecs.put(Codecs.MPEG4,"MPEG4");
-        codecs.put(Codecs.MPEG4,"H264");
-        //Return map
-        return codecs;
-    } 
     
     public static HashMap<Integer,String> getVADModes() {
         //The map
@@ -193,16 +171,6 @@ public class MediaMixer implements Serializable {
         modes.put(XmlRpcMcuClient.VADFULL,"Full");
         //Return map
         return modes;
-    }
-
-    public static HashMap<Integer,String> getTextCodecs() {
-        //The map
-        HashMap<Integer,String> codecs = new HashMap<Integer,String>();
-        //Add values
-        codecs.put(Codecs.T140,   "T140");
-        codecs.put(Codecs.T140RED,"T140RED");
-        //Return map
-        return codecs;
     }
 
     public static HashMap<Integer,String> getMosaics() {
@@ -219,6 +187,7 @@ public class MediaMixer implements Serializable {
         mosaics.put(XmlRpcMcuClient.MOSAICPIP1,"MOSAICPIP1");
         mosaics.put(XmlRpcMcuClient.MOSAICPIP3,"MOSAICPIP3");
         mosaics.put(XmlRpcMcuClient.MOSAIC4x4 ,"MOSAIC4x4");
+        mosaics.put(XmlRpcMcuClient.MOSAIC1p4 ,"MOSAIC1+4");
         //Return map
         return mosaics;
     }

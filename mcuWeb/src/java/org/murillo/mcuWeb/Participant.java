@@ -156,6 +156,7 @@ public abstract class Participant  implements Serializable {
     }
 
     protected void setState(State state) {
+        Logger.getLogger(Participant.class.getName()).log(Level.SEVERE, "Partipant {0} change state from {1} to {2}", new Object[]{getId(),this.state,state});
         //Call listeners
         for(Listener listener : listeners)
             //Call it
@@ -182,6 +183,18 @@ public abstract class Participant  implements Serializable {
 
     public Boolean getVideoSupported() {
         return videoSupported;
+    }
+
+    public void setAudioSupported(Boolean audioSupported) {
+        this.audioSupported = audioSupported;
+    }
+
+    public void setTextSupported(Boolean textSupported) {
+        this.textSupported = textSupported;
+    }
+
+    public void setVideoSupported(Boolean videoSupported) {
+        this.videoSupported = videoSupported;
     }
 
     public void setListener(Listener listener) {

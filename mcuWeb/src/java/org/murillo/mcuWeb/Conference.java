@@ -19,6 +19,7 @@
 
 package org.murillo.mcuWeb;
 
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,11 +27,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.TimeZone;
 import java.util.UUID;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.sip.Address;
+import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipURI;
 import org.apache.xmlrpc.XmlRpcException;
@@ -39,7 +42,6 @@ import org.murillo.MediaServer.XmlRpcMcuClient;
 import org.murillo.MediaServer.XmlRpcMcuClient.MediaStatistics;
 import org.murillo.mcuWeb.Participant.State;
 import org.murillo.mcuWeb.exceptions.ParticipantNotFoundException;
-import org.murillo.util.ThreadPool;
 
 /**
  *
@@ -77,6 +79,12 @@ public class Conference implements Participant.Listener {
     protected boolean autoAccept;
     protected HashSet<Listener> listeners;
     protected HashMap<String,List<Integer>> supportedCodecs = null;
+    protected HashMap<String,String> properties = null;
+    private SipURI defaultProxyUri;
+    private Boolean defatultRtcpFeedBack;
+    private boolean defaultUseIce;
+    private Boolean defaultIsSecure;
+    private boolean broadcasting;
 
     private static final Logger logger =  Logger.getLogger(ConferenceMngr.class.getName());
 
@@ -115,6 +123,8 @@ public class Conference implements Participant.Listener {
             slots[i] = 0;
         //Create supported codec map
         supportedCodecs = new HashMap<String, List<Integer>>();
+        //Create properties map
+        properties = new HashMap<String,String>();
         //Enable all audio codecs
         addSupportedCodec("audio", Codecs.SPEEX16);
         addSupportedCodec("audio", Codecs.GSM);
@@ -141,14 +151,20 @@ public class Conference implements Participant.Listener {
         if (vad!=XmlRpcMcuClient.VADNONE && (compType==XmlRpcMcuClient.MOSAIC1p7 || compType==XmlRpcMcuClient.MOSAIC1p5))
             //Vad controlled
             setMosaicSlot(0,XmlRpcMcuClient.SLOTVAD);
-        //Start broadcast
-        client.StartBroadcaster(id);
         //By default add to default mosaic
         addToDefaultMosaic = true;
         //By default do autoAccept
         autoAccept = true;
+        //RTP defaults
+        defatultRtcpFeedBack = false;
+        defaultUseIce = false;
+        defaultIsSecure = false;
         //Not isDestroying
         isDestroying = false;
+        //Start broadcast
+        broadcasting = client.StartBroadcaster(id);
+        //Start recording
+        startRecordingBroadcaster("/var/recordings/${DID}-${TS}.flv");
     }
 
     public void init() {
@@ -169,18 +185,22 @@ public class Conference implements Participant.Listener {
         while(it.hasNext())
         {
             try {
-            //Get the participant
-            Participant part = it.next();
-            //Disconnect
-            part.end();
+                //Get the participant
+                Participant part = it.next();
+                //Disconnect
+                part.end();
             } catch (Exception ex) {
                  logger.log(Level.SEVERE, "Error ending or destroying participant on conference destroy", ex);
-        }
+            }
         }
 
         try {
-            //Stop broadcast
-            client.StopBroadcaster(id);
+            //Stop recording
+            stopRecordingBroadcater();
+            //Check if broadcasting
+            if (broadcasting)
+                //Stop broadcast
+                client.StopBroadcaster(id);
         } catch (Exception ex) {
            logger.log(Level.SEVERE, "Error StopBroadcaster on conference destroy", ex);
         }
@@ -259,6 +279,18 @@ public class Conference implements Participant.Listener {
 
     public HashMap<Integer,Participant> getParticipants()   {
         return participants;
+    }
+
+    public void setDefatultRtcpFeedBack(Boolean defatultRtcpFeedBack) {
+        this.defatultRtcpFeedBack = defatultRtcpFeedBack;
+    }
+
+    public void setDefaultIsSecure(Boolean defaultIsSecure) {
+        this.defaultIsSecure = defaultIsSecure;
+    }
+
+    public void setDefaultUseIce(boolean defaultUseIce) {
+        this.defaultUseIce = defaultUseIce;
     }
 
     public Participant getParticipant(Integer partId) throws ParticipantNotFoundException  {
@@ -349,7 +381,6 @@ public class Conference implements Participant.Listener {
 
     public Participant createParticipant(Participant.Type type, String name,int mosaicId, int sidebarId) {
         Participant part = null;
-        Integer partId = -1;
 
         try {
             //Check name
@@ -357,18 +388,22 @@ public class Conference implements Participant.Listener {
                 //Empte name
                 name = "";
             //Create participant in mixer conference
-            partId = client.CreateParticipant(id,name.replace('.','_'),type.valueOf(),mosaicId,sidebarId);
+            Integer partId = client.CreateParticipant(id,name.replace('.','_'),type.valueOf(),mosaicId,sidebarId);
             //Check type
             if (type==Participant.Type.SIP)
             {
-            //Create the participant
+                //Create the participant
                 part = new RTPParticipant(partId,name,mosaicId,sidebarId,this);
-            //For each supported coed
-            for (Entry<String,List<Integer>> media : supportedCodecs.entrySet())
-                //for each codec
-                for (Integer codec : media.getValue())
-                    //Add media codec
-                    ((RTPParticipant)part).addSupportedCodec(media.getKey(), codec);
+                //Set defaults
+                ((RTPParticipant)part).setIsSecure(defaultIsSecure);
+                ((RTPParticipant)part).setUseICE(defaultUseIce);
+                ((RTPParticipant)part).setRtcpFeedBack(defatultRtcpFeedBack);
+                //For each supported coed
+                for (Entry<String,List<Integer>> media : supportedCodecs.entrySet())
+                    //for each codec
+                    for (Integer codec : media.getValue())
+                        //Add media codec
+                        ((RTPParticipant)part).addSupportedCodec(media.getKey(), codec);
             }
             //Set autoAccept
             part.setAutoAccept(autoAccept);
@@ -379,7 +414,7 @@ public class Conference implements Participant.Listener {
             //Set listener
             part.setListener(this);
         } catch (Exception ex) {
-            logger.log(Level.SEVERE, "Failed to create participant: {0}", ex.getMessage());
+            logger.log(Level.SEVERE, "Failed to create participant", ex);
         }
         return part;
     }
@@ -394,7 +429,7 @@ public class Conference implements Participant.Listener {
             //Error
             return -1;
         }
-        }
+    }
 
     public boolean setMosaicOverlayImage(Integer mosaicId, String fileName) {
         try {
@@ -417,7 +452,7 @@ public class Conference implements Participant.Listener {
             //exit
             return false;
         }
-        }
+    }
 
     public boolean deleteMosaic(Integer mosaicId) {
         try {
@@ -447,12 +482,18 @@ public class Conference implements Participant.Listener {
         }
     }
 
-    boolean acceptParticipant(Integer partId, Integer mosaicId) throws XmlRpcException, ParticipantNotFoundException {
+    boolean acceptParticipant(Integer partId, Integer mosaicId, Integer sidebarId) throws XmlRpcException, ParticipantNotFoundException {
         //Get the participant
         Participant part = getParticipant(partId);
 
         //Set mosaic for participant
-        client.SetParticipantMosaic(id,partId,mosaicId);
+        client.SetParticipantMosaic(id,part.getId(),mosaicId);
+        //Store value
+        part.setMosaicId(mosaicId);
+        //Set sidebar for participant
+        client.SetParticipantSidebar(id,part.getId(),sidebarId);
+        //Set it
+        part.setSidebarId(sidebarId);
 
         //Accept participant
         if (!part.accept())
@@ -467,7 +508,7 @@ public class Conference implements Participant.Listener {
         Participant part = getParticipant(partId);
         //Reject it
         return part.reject(486, "Rejected");
-        }
+    }
 
     public boolean changeParticipantProfile(Integer partId, Profile profile) throws ParticipantNotFoundException {
         //Get the participant
@@ -480,15 +521,15 @@ public class Conference implements Participant.Listener {
         //Get the participant
         Participant part = getParticipant(partId);
         //Set new video profile
-            part.setAudioMuted(flag);
-        }
+        part.setAudioMuted(flag);
+    }
 
     public void setParticipantVideoMute(Integer partId, Boolean flag) throws ParticipantNotFoundException {
         //Get the participant
         Participant part = getParticipant(partId);
         //Set new video profile
-            part.setVideoMuted(flag);
-        }
+        part.setVideoMuted(flag);
+    }
 
     public void setCompositionType(Integer compType, Integer size) {
         //Set it with default mosaic
@@ -521,7 +562,11 @@ public class Conference implements Participant.Listener {
         return new RTMPUrl("rtmp://"+mixer.getPublicIp()+"/mcu/"+id,"watcher/"+token);
     }
 
-    Participant callParticipant(String dest) {
+    public Participant callParticipant(String dest) {
+        return callParticipant(dest,null);
+    }
+
+    public Participant callParticipant(String dest,String proxy) {
         //Get ip address
         String domain = System.getProperty("SipBindAddress");
         //If it is not set
@@ -529,14 +574,24 @@ public class Conference implements Participant.Listener {
             //Set dummy domain
             domain = "mcuWeb";
         //Call
-        return callParticipant(dest,"sip:"+did+"@"+domain,XmlRpcMcuClient.DefaultMosaic,XmlRpcMcuClient.DefaultSidebar);
+        return callParticipant(dest,"sip:"+did+"@"+domain,proxy,XmlRpcMcuClient.DefaultMosaic,XmlRpcMcuClient.DefaultSidebar);
     }
 
-    Participant callParticipant(String dest,String orig,int mosaicId,int sidebarId) {
+    public Participant callParticipant(String dest,String orig,String proxy,int mosaicId,int sidebarId) {
+        //Log
+        logger.log(Level.INFO, "Calling {0} via {1} proxy or {2} default proxy", new Object[]{dest,proxy,defaultProxyUri});
         try {
+            SipURI proxyUri = null;
             //Create addresses
             Address to = sf.createAddress(dest);
             Address from = sf.createAddress(orig);
+            //Creaete proxy
+            if (proxy!= null && !proxy.isEmpty())
+                //Create uri
+                proxyUri = (SipURI) sf.createURI(proxy);
+            else
+                //Use default proxy
+                proxyUri = defaultProxyUri;
             //Get name
             String partName = to.getDisplayName();
             //If empty
@@ -546,7 +601,7 @@ public class Conference implements Participant.Listener {
             //Create participant
             RTPParticipant part = (RTPParticipant) createParticipant(Participant.Type.SIP,partName,mosaicId,sidebarId);
             //Make call
-            part.doInvite(sf,from,to);
+            part.doInvite(sf,from,to,proxyUri);
             //Return participant
             return part;
         } catch (Exception ex) {
@@ -556,7 +611,7 @@ public class Conference implements Participant.Listener {
         return null;
     }
 
-    void removeParticipant(Integer partId) throws ParticipantNotFoundException {
+    public void removeParticipant(Integer partId) throws ParticipantNotFoundException {
         //Get participant
         Participant part = getParticipant(partId);
         //Log
@@ -587,7 +642,7 @@ public class Conference implements Participant.Listener {
         {
                 //Increase the number of active participanst
                 numActParticipants++;
-                }
+        }
 
         //Check new state
         if (state.equals(State.DESTROYED))
@@ -610,7 +665,7 @@ public class Conference implements Participant.Listener {
          if (supportedCodecs.containsKey(media))
             //clear it
             supportedCodecs.get(media).clear();
-}
+    }
 
      public final void addSupportedCodec(String media,Integer codec) {
          //Check if we have the media
@@ -664,7 +719,7 @@ public class Conference implements Participant.Listener {
             listener.onParticipantCreated(getUID(),part);
     }
 
-      private void fireOnParticipantDestroyed(Participant part) {
+    private void fireOnParticipantDestroyed(Participant part) {
         //For each listener in set
         for (Listener listener : listeners)
             //Send it
@@ -685,4 +740,84 @@ public class Conference implements Participant.Listener {
         part.requestFPU();
     }
 
+    public void addProperty(String key,String value) {
+        //Add property
+        properties.put(key, value);
+    }
+
+    public void addProperties(HashMap<String,String> props) {
+        //Add all
+        properties.putAll(props);
+    }
+
+    public boolean containsProperty(String key) {
+        //Check
+        return properties.containsKey(key);
+    }
+
+    public String getProperty(String key) {
+        //Check
+        return properties.get(key);
+    }
+
+    public boolean isBroadcasting() {
+        return broadcasting;
+    }
+    
+    void setDefaultSipProxy(String proxy) throws ServletParseException {
+        //Create uri
+        defaultProxyUri = (SipURI) sf.createURI(proxy);
+    }
+
+    public boolean startRecordingBroadcaster(String filename)
+    {
+        //Check if broadcasting
+        if (!broadcasting)
+            //Error
+            return false;
+        try {
+            //Start recoriding
+            client.StartRecordingBroadcaster(id, filename);
+        } catch (XmlRpcException ex) {
+            //Log
+            logger.log(Level.SEVERE, "startRecordingBroadcaster", ex);
+            //Exit
+            return false;
+        }
+        //oK
+        return true;
+    }
+
+    public boolean stopRecordingBroadcater()
+    {
+        //Check if broadcasting
+        if (!broadcasting)
+            //Error
+            return false;
+        try {
+            //Start recoriding
+            client.StopRecordingBroadcaster(id);
+        } catch (XmlRpcException ex) {
+            //Log
+            logger.log(Level.SEVERE, "stopRecordingBroadcater", ex);
+            //Exit
+            return false;
+        }
+        //oK
+        return true;
+    }
+    String applyVariables(String stream) {
+        //Set formater
+        SimpleDateFormat utcDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+        //Set UTC time zone
+        utcDateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+        //Get time
+        String date = utcDateFormat.format(getTimestamp());
+        return stream.replace("${DID}", getDID())
+                .replace("${UID}", getUID())
+                .replace("${TS}", Long.toString(getTimestamp().getTime()))
+                .replace("${DATE}", date)
+                .replace("${NAME}", getName())
+                .replace("${ID}", getId().toString());
+    }
 }

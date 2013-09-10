@@ -610,6 +610,19 @@ public class ConferenceMngr implements Conference.Listener {
     public HashMap<String, Profile> getProfiles() {
         return profiles;
     }
+    
+    private ConferenceTemplate getConferenceTemplateForDID(String did) {
+        //check templates
+        for (ConferenceTemplate temp : templates.values())
+        {
+            //Check did
+            if(temp.isDIDMatched(did))
+                //return it
+                return temp;
+        }
+        //Nothing found
+        return null;
+    }
 
     public Conference getConference(String UID) throws ConferenceNotFoundExcetpion {
         //Get conference
@@ -649,25 +662,28 @@ public class ConferenceMngr implements Conference.Listener {
     }
 
     public Conference fetchConferenceByDID(String did) {
-        //Log
-        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINEST, "fetchConferenceByDID for {0}", new Object[]{did});
-        //Search already running conference
-        Conference conf = searchConferenceByDid(did);
-        //Check if found
-        if (conf!=null)
-            //return it
-            return conf;
-        //No conference check templates
-        for (ConferenceTemplate temp : templates.values())
+        //Block
+        synchronized(conferences)
         {
-            //Check did
-            if(temp.isDIDMatched(did))
-                //Create conference
-                return createConferenceAdHoc(did,temp);
+            //Log
+            Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINEST, "fetchConferenceByDID for {0}", new Object[]{did});
+            //Search already running conference
+            Conference conf = searchConferenceByDid(did);
+            //Check if found
+            if (conf!=null)
+                //return it
+                return conf;
+                //Find templates
+                ConferenceTemplate temp = getConferenceTemplateForDID(did);
+                //If found
+                if(temp!=null)
+                    //Create conference
+                    return createConferenceAdHoc(did,temp);
+            //No conference available
+            return null;
         }
-        //No conference available
-        return null;
     }
+
     public Conference getMappedConference(SipURI from,SipURI uri) {
         //Get did
         String did = uri.getUser();
@@ -785,19 +801,23 @@ public class ConferenceMngr implements Conference.Listener {
         }
     }
 
-    Participant callParticipant(String confId, String dest) throws ConferenceNotFoundExcetpion {
+    public Participant callParticipant(String confId, String dest) throws ConferenceNotFoundExcetpion {
+        return callParticipant(dest,null);
+    }
+
+    public Participant callParticipant(String confId, String dest, String proxy) throws ConferenceNotFoundExcetpion {
         //Get the conference
         Conference conf = getConference(confId);
         //And call the participant
-        return conf.callParticipant(dest);
+        return conf.callParticipant(dest,proxy);
     }
-    
-    public boolean acceptParticipant(String confId, Integer partId, Integer mosaicId) throws ConferenceNotFoundExcetpion, ParticipantNotFoundException {
+
+    public boolean acceptParticipant(String confId, Integer partId, Integer mosaicId, Integer sidebarId) throws ConferenceNotFoundExcetpion, ParticipantNotFoundException {
         try {
             //Get the conference
             Conference conf = getConference(confId);
             //And accept the participant
-            return conf.acceptParticipant(partId, mosaicId);
+            return conf.acceptParticipant(partId, mosaicId,sidebarId);
         } catch (XmlRpcException ex) {
             //Log
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
@@ -837,7 +857,23 @@ public class ConferenceMngr implements Conference.Listener {
         //Set composition
         conf.setCompositionType(mosaicId, compType, size);
     }
+
+    public void setProfile(String confId,String profileId) throws ConferenceNotFoundExcetpion {
+        //Get conference
+        Conference conf = getConference(confId);
+        //Get profile
+        Profile profile = profiles.get(profileId);
+        //Set values in conference
+        conf.setProfile(profile);
+    }
     
+    public void setCompositionType(String confId,Integer mosaicId, Integer compType, Integer size) throws ConferenceNotFoundExcetpion {
+        //Get conference
+        Conference conf = getConference(confId);
+        //Set composition
+        conf.setCompositionType(mosaicId, compType, size);
+    }
+
     public void setMosaicSlot(String confId, Integer mosaicId,Integer num, Integer partId) {
         //Get conference
         Conference conf = conferences.get(confId);
@@ -953,16 +989,10 @@ public class ConferenceMngr implements Conference.Listener {
         if (listeners.isEmpty())
             //Exit
             return;
-        //Launch asing
-        ThreadPool.Execute(new Runnable() {
-            @Override
-            public void run() {
-                    //For each listener in set
-                    for (Listener listener : listeners)
-                        //Send it
-                        listener.onConferenceDestroyed(confId);
-            }
-        });
+        //For each listener in set
+        for (Listener listener : listeners)
+            //Fire it sync
+            listener.onConferenceDestroyed(confId);
     }
 
      private void fireOnConferenceCreatead(final Conference conf) {
@@ -970,16 +1000,10 @@ public class ConferenceMngr implements Conference.Listener {
         if (listeners.isEmpty())
             //Exit
             return;
-        //Launch asing
-        ThreadPool.Execute(new Runnable() {
-            @Override
-            public void run() {
-                    //For each listener in set
-                    for (Listener listener : listeners)
-                        //Send it
-                        listener.onConferenceCreated(conf);
-            }
-        });
+        //For each listener in set
+        for (Listener listener : listeners)
+            //Fire it sync, so conf.AddListener can be addded before conf.Init is called and onConferenceInited is not lost
+            listener.onConferenceCreated(conf);
     }
 
     public int createMosaic(String confId,Integer compType, Integer size) throws ConferenceNotFoundExcetpion {

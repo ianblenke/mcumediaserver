@@ -56,14 +56,16 @@ import org.murillo.sdp.Attribute;
 import org.murillo.sdp.Bandwidth;
 import org.murillo.sdp.Connection;
 import org.murillo.sdp.CryptoAttribute;
+import org.murillo.sdp.FormatAttribute;
 import org.murillo.sdp.MediaDescription;
 import org.murillo.sdp.RTPMapAttribute;
 import org.murillo.sdp.SSRCAttribute;
 import org.murillo.sdp.SessionDescription;
+import org.murillo.util.H264ProfileLevelID;
 
 /**
  *
- * @author Sergio
+ * @author Sergio Garcia Murillo
  */
 public class RTPParticipant extends Participant {
 
@@ -96,7 +98,7 @@ public class RTPParticipant extends Participant {
     private boolean isSendingText;
     private ArrayList<MediaDescription> rejectedMedias;
     private String videoContentType;
-    private String h264profileLevelId;
+    private H264ProfileLevelID h264profileLevelId;
     private Integer h264packetization;
     private final String h264profileLevelIdDefault = "42801F";
     private Integer videoBitrate;
@@ -218,7 +220,7 @@ public class RTPParticipant extends Participant {
         rejectedMedias = new ArrayList<MediaDescription>();
         videoContentType = "";
         //Set default level and packetization
-        h264profileLevelId = "";
+        h264profileLevelId = null;
         h264packetization = 0;
         //Enable session refresh support
         sessionTimersEnabled = true;
@@ -678,9 +680,9 @@ public class RTPParticipant extends Participant {
                     if (codec==Codecs.H264)
                     {
                         //Check if we are offering first
-                        if (h264profileLevelId.isEmpty())
+                        if (h264profileLevelId == null)
                             //Set default profile
-                            h264profileLevelId = h264profileLevelIdDefault;
+                            h264profileLevelId = new H264ProfileLevelID(h264profileLevelIdDefault);
 
                         //Check packetization mode
                         if (h264packetization>0)
@@ -703,12 +705,17 @@ public class RTPParticipant extends Participant {
                             //Add redundancy fmt
                             md.addFormatAttribute(fmt,t140 + "/" + t140 + "/" + t140);
                     }
-                    //Add rtcp-fb nack support for all payload types
-                    md.addAttribute("rtcp-fb", fmt+" nack");
+
                     //Add rtcp-fb fir/pli only for video codecs
                     if (mediaName.equals("video") && codec!=Codecs.RED  && codec!=Codecs.ULPFEC)
+                    {
+                        //Add rtcp-fb nack support
+                        md.addAttribute("rtcp-fb", fmt+" nack");
                         //Add fir
                         md.addAttribute("rtcp-fb", fmt+" ccm fir");
+                        //Add Remb
+                        md.addAttribute("rtcp-fb", fmt+" goog-remb");
+                    }
                 }
             }
         }
@@ -991,16 +998,20 @@ public class RTPParticipant extends Participant {
             {
                 //Secure (WARNING: if one media is secure, all will be secured, FIX!!)
                 isSecure = true;
-                //Create media crypto params
-                CryptoInfo info = new CryptoInfo();
                 //Get crypto header
                 CryptoAttribute crypto = (CryptoAttribute) md.getAttribute("crypto");
-                //Get suite
-                info.suite = crypto.getSuite();
-                //Get key
-                info.key = crypto.getFirstKeyParam().getInfo();
-                //Add it
-                remoteCryptoInfo.put(media, info);
+                //Check it
+                if (crypto!=null)
+                {
+                    //Create media crypto params
+                    CryptoInfo info = new CryptoInfo();
+                    //Get suite
+                    info.suite = crypto.getSuite();
+                    //Get key
+                    info.key = crypto.getFirstKeyParam().getInfo();
+                    //Add it
+                    remoteCryptoInfo.put(media, info);
+                }
             }
             //Check if has rtcp
             if (rtpProfile.endsWith("F"))
@@ -1009,7 +1020,7 @@ public class RTPParticipant extends Participant {
 
             //FIX
             Integer h264type = 0;
-            String maxh264profile = "";
+            H264ProfileLevelID maxh264profile = null;
 
             //For each format
             for (String fmt : md.getFormats())
@@ -1036,7 +1047,7 @@ public class RTPParticipant extends Participant {
                 String codecName = rtpMap.getName();
                 //Get codec for name
                 Integer codec = Codecs.getCodecForName(media,codecName);
-                //if it is h264 TODO: FIIIIX!!!
+                    //if it is h264
                 if (codec==Codecs.H264)
                 {
                         int k = -1;
@@ -1049,15 +1060,15 @@ public class RTPParticipant extends Participant {
                         //Check it
                         if (k!=-1)
                         {
-                            //Get profile
-                            String profile = ftmpLine.substring(k+17,k+23);
+                            //Get profile level indication
+                            H264ProfileLevelID profileLevelId = new H264ProfileLevelID(ftmpLine.substring(k+17,k+23));
                             //Convert and compare
-                            if (maxh264profile.isEmpty() || Integer.parseInt(profile,16)>Integer.parseInt(maxh264profile,16))
+                            if (profileLevelId.getProfile()<=Codecs.MaxH264SupportedProfile && (maxh264profile==null || profileLevelId.getProfile()>maxh264profile.getProfile()) )
                             {
                                 //Store this type provisionally
                                 h264type = type;
                                 //store new profile value
-                                maxh264profile = profile;
+                                maxh264profile = profileLevelId;
                                 //Check if it has packetization parameter
                                 if (ftmpLine.indexOf("packetization-mode=1")!=-1)
                                     //Set it
@@ -1068,7 +1079,7 @@ public class RTPParticipant extends Participant {
                             }
                     } else {
                         //check if no profile has been received so far
-                        if (maxh264profile.isEmpty())
+                            if (maxh264profile==null)
                             //Store this type provisionally
                             h264type = type;
                     }
@@ -1518,11 +1529,17 @@ public class RTPParticipant extends Participant {
         doInvite(sf,from,to,null,timeout,null);
     }
 
-    void doInvite(SipFactory sf, Address from,Address to,SipURI proxy,int timeout,String location) throws IOException, XmlRpcException {
+    void doInvite(SipFactory sf, Address from,Address to,SipURI proxy) throws XmlRpcException  {
+        doInvite(sf, from, to,proxy,1,null);
+    }
+
+    void doInvite(SipFactory sf, Address from,Address to,SipURI proxy,int timeout,String location) throws XmlRpcException {
         try
         {
             //Store to as participant address
             address = to;
+            //Store proxy
+            this.proxy = proxy;
             //Start receiving media
             startReceiving();
             //Create the application session
