@@ -802,7 +802,7 @@ public class ConferenceMngr implements Conference.Listener {
     }
 
     public Participant callParticipant(String confId, String dest) throws ConferenceNotFoundExcetpion {
-        return callParticipant(dest,null);
+        return callParticipant(confId,dest,null);
     }
 
     public Participant callParticipant(String confId, String dest, String proxy) throws ConferenceNotFoundExcetpion {

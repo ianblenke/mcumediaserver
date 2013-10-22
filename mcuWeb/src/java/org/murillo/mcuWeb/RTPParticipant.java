@@ -56,6 +56,8 @@ import org.murillo.sdp.Attribute;
 import org.murillo.sdp.Bandwidth;
 import org.murillo.sdp.Connection;
 import org.murillo.sdp.CryptoAttribute;
+import org.murillo.sdp.ExtMapAttribute;
+import org.murillo.sdp.FingerprintAttribute;
 import org.murillo.sdp.FormatAttribute;
 import org.murillo.sdp.MediaDescription;
 import org.murillo.sdp.RTPMapAttribute;
@@ -93,6 +95,8 @@ public class RTPParticipant extends Participant {
     private HashMap<String,List<Integer>> supportedCodecs = null;
     private HashMap<String,HashMap<Integer,Integer>> rtpInMediaMap = null;
     private HashMap<String,HashMap<Integer,Integer>> rtpOutMediaMap = null;
+    private HashMap<String,HashMap<String,Integer>> supportedExtensions = null;
+    private HashMap<String,HashMap<String,Integer>> rtpExtensionMap = null;
     private boolean isSendingAudio;
     private boolean isSendingVideo;
     private boolean isSendingText;
@@ -246,6 +250,17 @@ public class RTPParticipant extends Participant {
         rtpMediaProperties.put("audio",new HashMap<String,String>());
         rtpMediaProperties.put("video",new HashMap<String,String>());
         rtpMediaProperties.put("text",new HashMap<String,String>());
+	//Map of extensions
+	supportedExtensions = new HashMap<String, HashMap<String, Integer>>();
+	//Create extensions for each media
+	supportedExtensions.put("audio", new HashMap<String,Integer>());
+	supportedExtensions.put("video", new HashMap<String,Integer>());
+	//Add them
+	supportedExtensions.get("audio").put("urn:ietf:params:rtp-hdrext:ssrc-audio-level",1);
+	supportedExtensions.get("video").put("urn:ietf:params:rtp-hdrext:toffset",2);
+	supportedExtensions.get("video").put("http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time",3);
+	//Create extension map
+	rtpExtensionMap = new HashMap<String, HashMap<String, Integer>>();
         //Has RTCP feedback
         rtcpFeedBack = false;
 }
@@ -613,8 +628,10 @@ public class RTPParticipant extends Participant {
         {
             //Add host candidate for RTP
             md.addCandidate("1", 1, "UDP", 33554432-1, getRecIp(), port, "host");
-            //Add host candidate for RTCP
-            md.addCandidate("1", 2, "UDP", 33554432-2, getRecIp(), port+1, "host");
+	        //Check if not using rtcp mux
+	        if (!rtpMediaProperties.get(mediaName).containsKey("rtcp-mux"))
+                //Add host candidate for RTCP
+                md.addCandidate("1", 2, "UDP", 33554432-2, getRecIp(), port+1, "host");
             //Get ICE info
             ICEInfo info = localICEInfo.get(mediaName);
             //If ge have it
@@ -694,6 +711,19 @@ public class RTPParticipant extends Participant {
                     } else if (codec==Codecs.H263_1996) {
                         //Add h263 supported sizes
                         md.addFormatAttribute(fmt,"CIF=1;QCIF=1");
+                    } else if (codec==Codecs.OPUS) {
+                        //Create format
+                        FormatAttribute fmtp = new FormatAttribute(fmt);
+                        //Add parameters
+                        fmtp.addParameter("ptime"       ,20);
+                        fmtp.addParameter("maxptime"    ,20);
+                        fmtp.addParameter("minptime"    ,20);
+                        fmtp.addParameter("useinbandfec",0);
+                        fmtp.addParameter("usedtx"      ,0);
+                        //Mono
+                        fmtp.addParameter("stereo",0);
+                        //Add opus params support
+                        md.addAttribute(fmtp);
                     } else if (codec==Codecs.ULPFEC) {
                         //Enable fec
                         rtpMediaProperties.get(mediaName).put("useFEC", "1");
@@ -724,6 +754,21 @@ public class RTPParticipant extends Participant {
         if (mediaName.equals("video") && !videoContentType.isEmpty())
             //Add attribute
             md.addAttribute("content",videoContentType);
+
+		//Get extensions for media
+		HashMap<String, Integer> extensions = rtpExtensionMap.get(mediaName);
+	
+		//If we don't have yet an extension map, send the supported
+		if (extensions==null)
+		    //Get supported extensions
+		    extensions = supportedExtensions.get(mediaName);
+	
+		//If we have extensions
+		if (extensions!=null)
+		    //For each one
+		    for (Entry<String,Integer> pair : extensions.entrySet())
+				//Add new extension attribute
+				md.addAttribute(new ExtMapAttribute(pair.getValue(), pair.getKey()));
 
         //If not format has been found
         if (md.getFormats().isEmpty())
@@ -948,10 +993,10 @@ public class RTPParticipant extends Participant {
                         videoContentType = mediaContentType;
                     }
                 }
-                //Check if we have a media rate
-                if (mediaBitrate>0)
-                //Store bitrate
-                videoBitrate = mediaBitrate;
+                //Check if we have a media rate less than the current bitrate
+                if (mediaBitrate>0 && mediaBitrate<videoBitrate)
+                    //Store bitrate
+                    videoBitrate = mediaBitrate;
                 //Set as supported
                 videoSupported = true;
             } else if (media.equals("text")) {
@@ -1000,7 +1045,8 @@ public class RTPParticipant extends Participant {
                 isSecure = true;
                 //Get crypto header
                 CryptoAttribute crypto = (CryptoAttribute) md.getAttribute("crypto");
-                //Check it
+
+				//Check SDES key
                 if (crypto!=null)
                 {
                     //Create media crypto params
@@ -1214,6 +1260,39 @@ public class RTPParticipant extends Participant {
             if (remoteMediaICEFrag!=null && remtoeMediaICEPwd!=null)
                     //Create info and add to remote ones
                     remoteICEInfo.put(media, new ICEInfo(remoteMediaICEFrag,remtoeMediaICEPwd));
+		    //Get extmap atrributes
+		    ArrayList<Attribute> extmaps = md.getAttributes("extmap");
+		    //Get supported extensions
+		    HashMap<String, Integer> supported = supportedExtensions.get(media);
+		    //If some extensions are supported for this media
+		    if (supported!=null)
+		    {
+				boolean offer = false;
+				//If it has not been created yet
+				if (rtpExtensionMap.containsKey(media))
+				{
+				    //Set it
+				    rtpExtensionMap.put(media, new HashMap<String, Integer>());
+				    //The SDP is an offer
+				    offer = true;
+		        }
+				//For each one
+				for (Attribute attr : extmaps)
+				{
+				    //Cast
+				    ExtMapAttribute extmap = (ExtMapAttribute) attr;
+				    //Check if it is supperted
+				    if (supported.containsKey(extmap.getName()))
+				    {
+					//If it is an offer
+					if (offer)
+					    //Add it also to the outgoing SDP extmap
+					    rtpExtensionMap.get(media).put(extmap.getName(), extmap.getId());
+					//Add to the
+					rtpMediaProperties.get(media).put(extmap.getName(), extmap.getId().toString());
+				    }
+				}
+		    }
         }
         return sdp;
     }

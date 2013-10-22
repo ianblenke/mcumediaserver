@@ -164,7 +164,7 @@ public class Conference implements Participant.Listener {
         //Start broadcast
         broadcasting = client.StartBroadcaster(id);
         //Start recording
-        startRecordingBroadcaster("/var/recordings/${DID}-${TS}.flv");
+        startRecordingBroadcaster(applyVariables("/var/recordings/${DID}-${TS}.flv"));
     }
 
     public void init() {

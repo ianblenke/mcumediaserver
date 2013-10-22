@@ -36,24 +36,6 @@ public class Codecs {
         }
     };
 
-    public static class CodecInfo {
-        public CodecInfo(MediaType media,Integer codec) {
-            this.media = media;
-            this.codec = codec;
-        }
-        private MediaType media;
-        private Integer codec;
-
-        public Integer getCodec() {
-            return codec;
-        }
-
-        public MediaType getMedia() {
-            return media;
-        }
-        
-    }
-
     public static final Integer PCMU    = 0;
     public static final Integer PCMA    = 8;
     public static final Integer GSM     = 3;
@@ -80,30 +62,6 @@ public class Codecs {
     public static final Integer T140         = 106;
 
     public static final Integer MaxH264SupportedProfile = 77;
-
-    /*public static CodecInfo getCodecInfoForname(String name)
-    {
-         if (name.equalsIgnoreCase("PCMU"))         return new CodecInfo(MediaType.AUDIO,PCMU);
-         if (name.equalsIgnoreCase("PCMA"))         return new CodecInfo(MediaType.AUDIO,PCMA);
-         if (name.equalsIgnoreCase("GSM"))          return new CodecInfo(MediaType.AUDIO,GSM);
-         if (name.equalsIgnoreCase("SPEEX"))        return new CodecInfo(MediaType.AUDIO,SPEEX16);
-         if (name.equalsIgnoreCase("AMR"))          return new CodecInfo(MediaType.AUDIO,AMR);
-         if (name.equalsIgnoreCase("AMR-WB"))       return new CodecInfo(MediaType.AUDIO,AMR_WB);
-         if (name.equalsIgnoreCase("G726"))         return new CodecInfo(MediaType.AUDIO,G726);
-         if (name.equalsIgnoreCase("G722"))         return new CodecInfo(MediaType.AUDIO,G722);
-         if (name.equalsIgnoreCase("NELLY11"))      return new CodecInfo(MediaType.AUDIO,NELLY11);
-         if (name.equalsIgnoreCase("telephone-event"))       return new CodecInfo(MediaType.AUDIO,TELEFONE_EVENT);
-         if (name.equalsIgnoreCase("H263"))        return new CodecInfo(MediaType.VIDEO,H263_1996);
-         if (name.equalsIgnoreCase("H263-1998"))   return new CodecInfo(MediaType.VIDEO,H263_1998);
-         if (name.equalsIgnoreCase("H263-2000"))   return new CodecInfo(MediaType.VIDEO,H263_1998);
-         if (name.equalsIgnoreCase("MP4V"))        return new CodecInfo(MediaType.VIDEO,MPEG4);
-         if (name.equalsIgnoreCase("H264"))        return new CodecInfo(MediaType.VIDEO,H264);
-         if (name.equalsIgnoreCase("SORENSON"))    return new CodecInfo(MediaType.VIDEO,SORENSON);
-         if (name.equalsIgnoreCase("VP8"))         return new CodecInfo(MediaType.VIDEO,VP8);
-         if (name.equalsIgnoreCase("RED"))         return new CodecInfo(MediaType.TEXT,T140RED);
-         if (name.equalsIgnoreCase("T140"))        return new CodecInfo(MediaType.TEXT,T140);
-         return null;
-    }*/
 
     public static Integer getCodecForName(String media,String name)
     {
