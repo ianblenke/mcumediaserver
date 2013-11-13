@@ -36,6 +36,44 @@ public class Codecs {
         }
     };
 
+    public static enum Direction {
+	INACTIVE("inactive"),
+        SENDRECV("sendrecv"),
+        SENDONLY("sendolny"),
+        RECVONLY("recvonly");
+
+        public final String value;
+
+        Direction(String value){
+            this.value = value;
+        }
+
+        public String valueOf() {
+            return value;
+        }
+	public boolean isSending() {
+	    return equals(SENDRECV) || equals(SENDONLY);
+	}
+
+	public boolean isReceving() {
+	    return equals(SENDRECV) || equals(RECVONLY);
+	}
+
+	public boolean equals(Direction dir) {
+	    return value.equals(dir.value);
+	}
+
+	public Direction reverse() {
+	    if (equals(RECVONLY))
+		return SENDONLY;
+	    else if (equals(SENDONLY))
+		return RECVONLY;
+	    else
+		return this;
+	}
+
+    };
+
     public static final Integer PCMU    = 0;
     public static final Integer PCMA    = 8;
     public static final Integer GSM     = 3;

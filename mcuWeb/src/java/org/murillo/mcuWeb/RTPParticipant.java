@@ -158,7 +158,6 @@ public class RTPParticipant extends Participant {
             this.suite = suite;
             this.key = key;
         }
-
     }
 
     private static class ICEInfo
@@ -193,7 +192,6 @@ public class RTPParticipant extends Participant {
             this.ufrag = ufrag;
             this.pwd = pwd;
         }
-
     }
 
     RTPParticipant(Integer id,String name,Integer mosaicId,Integer sidebarId,Conference conf) throws XmlRpcException {
@@ -845,14 +843,20 @@ public class RTPParticipant extends Participant {
 
     public SessionDescription processSDP(String body) throws IllegalArgumentException, ParserException
     {
+	 //Parse conent
+        SessionDescription sdp = SessionDescription.Parse(body);
+
+	//Process it
+	return processSDP(sdp);
+    }
+
+    public SessionDescription processSDP(SessionDescription sdp) throws IllegalArgumentException
+    {
         //Connnection IP
         String ip = null;
         //ICE credentials
         String remoteICEFrag = null;
         String remtoeICEPwd = null;
-
-        //Parse conent
-        SessionDescription sdp = SessionDescription.Parse(body);
 
         //Get the connection field
         Connection conn = sdp.getConnection();
@@ -952,16 +956,12 @@ public class RTPParticipant extends Participant {
                 if (mediaBitrate==0 || rate<mediaBitrate)
                     //Set it
                     mediaBitrate = rate;
-                //Check bandwith type
-                 if (band.getBandwidth().equalsIgnoreCase("TIAS"))
-                    //Convert to kbps
-                    mediaBitrate = mediaBitrate/1000;
             }
 
             //Check if it supports rtcp-muxing
-            if (md.hasAttribute("rtcp-mux"))
+            //if (md.hasAttribute("rtcp-mux"))
                 //Add attribute
-                rtpMediaProperties.get("audio").put("rtcp-mux", "1");
+                //rtpMediaProperties.get(media).put("rtcp-mux", "1");
 
             //Add support for the media
             if (media.equals("audio")) {
@@ -994,7 +994,7 @@ public class RTPParticipant extends Participant {
                     }
                 }
                 //Check if we have a media rate less than the current bitrate
-                if (mediaBitrate>0 && mediaBitrate<videoBitrate)
+                if (videoBitrate==0 || (mediaBitrate>0 && mediaBitrate<videoBitrate))
                     //Store bitrate
                     videoBitrate = mediaBitrate;
                 //Set as supported
@@ -1383,10 +1383,21 @@ public class RTPParticipant extends Participant {
             }
             //Get expire header
             String sessionExpiresHeader = inviteRequest.getHeader("Session-Expires");
+
             //If found
             if (sessionExpiresHeader!=null)
+	    {
+		//Parse the expire time
+                String expire = sessionExpiresHeader;
+                //Find delimiter
+                int i = sessionExpiresHeader.indexOf(';');
+                //If it contains the ;refresher=uas
+                if (i!=-1)
+                    //Remove it
+                    expire = expire.substring(0, i);
                 //Parse
-                sessionExpires = Integer.parseInt(sessionExpiresHeader);
+                sessionExpires = Integer.parseInt(expire);
+        }
         }
         //Get allow header
         String allowHeader = inviteRequest.getHeader("Allow");
