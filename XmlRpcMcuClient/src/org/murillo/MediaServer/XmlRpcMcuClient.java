@@ -34,17 +34,18 @@ import org.murillo.MediaServer.Codecs.MediaType;
  */
 public class XmlRpcMcuClient {
 
-    public class MediaStatistics {
-	public boolean	isSending;
-	public boolean	isReceiving;
-        public Integer	lostRecvPackets;
-	public Integer	numRecvPackets;
-	public Integer	numSendPackets;
-	public Integer	totalRecvBytes;
-	public Integer	totalSendBytes;
+    public static class MediaStatistics {
+	public boolean	isSending = false;
+	public boolean	isReceiving = false;
+        public Integer	lostRecvPackets = 0;
+	public Integer	numRecvPackets = 0;
+	public Integer	numSendPackets = 0;
+	public Integer	totalRecvBytes = 0;
+	public Integer	totalSendBytes = 0;
+
     };
 
-    public class ConferenceInfo {
+    public static class ConferenceInfo {
         public Integer id;
         public String name;
         public Integer numPart;
@@ -390,6 +391,28 @@ public class XmlRpcMcuClient {
         Object[] request = new Object[]{confId,partId,media.valueOf(),suite,key};
         //Execute
         HashMap response = (HashMap) client.execute("SetRemoteCryptoSDES", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+    public String GetLocalCryptoDTLSFingerprint(String hash) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{hash};
+        //Execute
+        HashMap response = (HashMap) client.execute("GetLocalCryptoDTLSFingerprint", request);
+	//Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+	//Get result
+        return (String) returnVal[0];
+    }
+
+    public boolean SetRemoteCryptoDTLS(Integer confId,Integer partId,MediaType media,String setup,String hash,String fingerprint) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,partId,media.valueOf(),setup,hash,fingerprint};
+        //Execute
+        HashMap response = (HashMap) client.execute("SetRemoteCryptoDTLS", request);
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }

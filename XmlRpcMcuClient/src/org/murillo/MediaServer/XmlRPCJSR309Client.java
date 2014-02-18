@@ -313,6 +313,28 @@ public class XmlRPCJSR309Client {
         return (((Integer)response.get("returnCode"))==1);
     }
 
+    public String EndpointGetLocalCryptoDTLSFingerprint(String hash) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{hash};
+        //Execute
+        HashMap response = (HashMap) client.execute("EndpointGetLocalCryptoDTLSFingerprint", request);
+	//Get result
+        Object[] returnVal = (Object[]) response.get("returnVal");
+	//Get result
+        return (String) returnVal[0];
+    }
+
+    public boolean EndpointSetRemoteCryptoDTLS(Integer sessId,Integer endpointId,MediaType media,String setup,String hash,String fingerprint) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{sessId,endpointId,media.valueOf(),setup,hash,fingerprint};
+        //Execute
+        HashMap response = (HashMap) client.execute("EndpointSetRemoteCryptoDTLS", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+    
     public boolean EndpointSetRTPProperties(Integer sessId,Integer endpointId,MediaType media, HashMap<String,String> properties) throws XmlRpcException
     {
         //Create request

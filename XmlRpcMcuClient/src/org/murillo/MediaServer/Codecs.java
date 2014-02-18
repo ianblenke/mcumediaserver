@@ -74,6 +74,53 @@ public class Codecs {
 
     };
 
+    public static enum Setup {
+	ACTIVE("active"),
+        PASSIVE("passive"),
+        ACTPASS("actpass"),
+        INACTIVE("inactive");
+
+	public static Setup byValue(String value) {
+	    if (ACTIVE.equals(value))
+		return ACTIVE;
+	    else if (PASSIVE.equals(value))
+		return PASSIVE;
+	    else if (ACTPASS.equals(value))
+		return ACTPASS;
+	    return INACTIVE;
+	}
+
+        public final String value;
+
+        Setup(String value){
+            this.value = value;
+        }
+
+        public String valueOf() {
+            return value;
+        }
+	
+	public boolean equals(Setup setup) {
+	    return value.equals(setup.value);
+	}
+
+	public boolean equals(String setup) {
+	    return value.equals(setup);
+	}
+
+	public Setup reverse() {
+	    if (equals(ACTIVE))
+		return PASSIVE;
+	    else if (equals(PASSIVE))
+		return ACTIVE;
+	    else if (equals(ACTPASS))
+		return PASSIVE;
+	    else
+		return INACTIVE;
+	}
+
+    };
+
     public static final Integer PCMU    = 0;
     public static final Integer PCMA    = 8;
     public static final Integer GSM     = 3;
@@ -212,5 +259,54 @@ public class Codecs {
          }
         //retrun list
         return codecs;
+    }
+
+
+     public static class CodecInfo {
+	public CodecInfo(MediaType media,Integer codec,Integer rate) {
+	    this.media = media;
+	    this.codec = codec;
+	    this.rate  = rate;
+	}
+	private MediaType media;
+	private Integer codec;
+	private Integer rate;
+
+	public Integer getCodec() {
+	    return codec;
+	}
+
+	public MediaType getMedia() {
+	    return media;
+	}
+
+	public Integer getRate() {
+	    return rate;
+	}
+
+    }
+
+    public static CodecInfo getCodecInfoForname(String name)
+    {
+         if (name.equalsIgnoreCase("PCMU"))		return new CodecInfo(MediaType.AUDIO,PCMU,8000);
+         if (name.equalsIgnoreCase("PCMA"))		return new CodecInfo(MediaType.AUDIO,PCMA,8000);
+         if (name.equalsIgnoreCase("GSM"))		return new CodecInfo(MediaType.AUDIO,GSM,8000);
+         if (name.equalsIgnoreCase("SPEEX"))		return new CodecInfo(MediaType.AUDIO,SPEEX16,16000);
+         if (name.equalsIgnoreCase("AMR"))		return new CodecInfo(MediaType.AUDIO,AMR,8000);
+         if (name.equalsIgnoreCase("AMR-WB"))		return new CodecInfo(MediaType.AUDIO,AMR_WB,16000);
+         if (name.equalsIgnoreCase("G726"))		return new CodecInfo(MediaType.AUDIO,G726,8000);
+         if (name.equalsIgnoreCase("G722"))		return new CodecInfo(MediaType.AUDIO,G722,8000);
+         if (name.equalsIgnoreCase("NELLY11"))		return new CodecInfo(MediaType.AUDIO,NELLY11,11000);
+         if (name.equalsIgnoreCase("telephone-event"))  return new CodecInfo(MediaType.AUDIO,TELEFONE_EVENT,1000);
+         if (name.equalsIgnoreCase("H263"))		return new CodecInfo(MediaType.VIDEO,H263_1996,90000);
+         if (name.equalsIgnoreCase("H263-1998"))	return new CodecInfo(MediaType.VIDEO,H263_1998,90000);
+         if (name.equalsIgnoreCase("H263-2000"))	return new CodecInfo(MediaType.VIDEO,H263_1998,90000);
+         if (name.equalsIgnoreCase("MP4V"))		return new CodecInfo(MediaType.VIDEO,MPEG4,90000);
+         if (name.equalsIgnoreCase("H264"))		return new CodecInfo(MediaType.VIDEO,H264,90000);
+         if (name.equalsIgnoreCase("SORENSON"))		return new CodecInfo(MediaType.VIDEO,SORENSON,90000);
+         if (name.equalsIgnoreCase("VP8"))		return new CodecInfo(MediaType.VIDEO,VP8,90000);
+         if (name.equalsIgnoreCase("RED"))		return new CodecInfo(MediaType.TEXT,T140RED,90000);
+         if (name.equalsIgnoreCase("T140"))		return new CodecInfo(MediaType.TEXT,T140,90000);
+         return null;
     }
 }
