@@ -84,6 +84,7 @@ public class Conference implements Participant.Listener {
     private Boolean defatultRtcpFeedBack;
     private boolean defaultUseIce;
     private Boolean defaultIsSecure;
+    private boolean defaultUseDTLS;
     private boolean broadcasting;
 
     private static final Logger logger =  Logger.getLogger(ConferenceMngr.class.getName());
@@ -158,6 +159,7 @@ public class Conference implements Participant.Listener {
         //RTP defaults
         defatultRtcpFeedBack = false;
         defaultUseIce = false;
+	defaultUseDTLS = false;
         defaultIsSecure = false;
         //Not isDestroying
         isDestroying = false;
@@ -397,6 +399,7 @@ public class Conference implements Participant.Listener {
                 //Set defaults
                 ((RTPParticipant)part).setIsSecure(defaultIsSecure);
                 ((RTPParticipant)part).setUseICE(defaultUseIce);
+		((RTPParticipant)part).setUseDTLS(defaultUseDTLS);
                 ((RTPParticipant)part).setRtcpFeedBack(defatultRtcpFeedBack);
                 //For each supported coed
                 for (Entry<String,List<Integer>> media : supportedCodecs.entrySet())

@@ -137,7 +137,7 @@
                 <td><select name="size"><%
 		for (Entry<Integer,String> entry: sizes.entrySet())
 		{
-			%><option value="<%=entry.getKey()%>" <%=conf.getSize()==entry.getKey()?"selected":""%>><%=entry.getValue()%><%
+			%><option value="<%=entry.getKey()%>" <%=conf.getSize()==entry.getKey()?"selected":""%>>entry.getValue()<%
 		}
 	%></select></td>
                 </td>

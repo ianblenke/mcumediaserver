@@ -185,6 +185,10 @@ public abstract class Participant  implements Serializable {
         return videoSupported;
     }
 
+    public Boolean isSending(String string) {
+	return true;
+    }
+
     public void setAudioSupported(Boolean audioSupported) {
         this.audioSupported = audioSupported;
     }
@@ -247,7 +251,7 @@ public abstract class Participant  implements Serializable {
 
     public Boolean getAudioMuted() {
         return audioMuted;
-            }
+        }
 
     public Boolean getTextMuted() {
         return textMuted;
@@ -278,7 +282,7 @@ public abstract class Participant  implements Serializable {
     public boolean setVideoProfile(Profile profile)     { return false;}
     public boolean accept()                             { return false;}
     public boolean reject(Integer code,String reason)   { return false;}
-    public void restart()                               {}
+    public void restart(Integer partId)                 { throw new RuntimeException("Not supported yet"); }
     public void end()                                   {}
     public void destroy()                               {}
     void requestFPU()                                   {}

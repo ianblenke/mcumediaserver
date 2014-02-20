@@ -142,23 +142,29 @@ public class MediaMixer implements Serializable {
         //The map
         HashMap<Integer,String> sizes = new HashMap<Integer,String>();
         //Add values
-        sizes.put(XmlRpcMcuClient.QCIF,"QCIF");
-        sizes.put(XmlRpcMcuClient.CIF,"CIF");
-        sizes.put(XmlRpcMcuClient.VGA,"VGA");
-        sizes.put(XmlRpcMcuClient.PAL,"PAL");
-        sizes.put(XmlRpcMcuClient.HVGA,"HVGA");
-        sizes.put(XmlRpcMcuClient.QVGA,"QVGA");
-        sizes.put(XmlRpcMcuClient.HD720P,"HD720P");
-        sizes.put(XmlRpcMcuClient.WQVGA,"WQVGA");
-        sizes.put(XmlRpcMcuClient.w448P,"w448P");
-        sizes.put(XmlRpcMcuClient.sd448P,"448P");
-        sizes.put(XmlRpcMcuClient.w288P,"w288P");
-        sizes.put(XmlRpcMcuClient.w576,"w576");
-        sizes.put(XmlRpcMcuClient.FOURCIF,"4CIF");
-        sizes.put(XmlRpcMcuClient.FOURSIF,"4SIF");
-        sizes.put(XmlRpcMcuClient.XGA,"XGA");
-        sizes.put(XmlRpcMcuClient.WVGA,"WVGA");
-        sizes.put(XmlRpcMcuClient.DCIF,"DCIF");
+	//Set values
+	sizes.put(XmlRpcMcuClient.QCIF,	    "QCIF\t176x144:1,22");
+	sizes.put(XmlRpcMcuClient.CIF,	    "CIF\t352x288:1,22");
+	sizes.put(XmlRpcMcuClient.VGA,	    "VGA\t640x480:1,33");
+	sizes.put(XmlRpcMcuClient.PAL,	    "PAL\t768x576:1,33");
+	sizes.put(XmlRpcMcuClient.HVGA,	    "HVGA\t480x320:1,50");
+	sizes.put(XmlRpcMcuClient.QVGA,	    "QVGA\t320x240:1,33");
+	sizes.put(XmlRpcMcuClient.HD720P,   "HD720P\t1280x720:1,78");
+	sizes.put(XmlRpcMcuClient.WQVGA,    "WQVGA\t400x240:1,67");
+	sizes.put(XmlRpcMcuClient.W448P,    "W448P\t768x448:1,71");
+	sizes.put(XmlRpcMcuClient.SD448P,   "SD448P\t576x448:1,29");
+	sizes.put(XmlRpcMcuClient.W288P,    "W288P\t512x288:1,78");
+	sizes.put(XmlRpcMcuClient.W576,	    "W576\t1024x576:1,78");
+	sizes.put(XmlRpcMcuClient.FOURCIF,  "FOURCIF\t704x576:1,22");
+	sizes.put(XmlRpcMcuClient.FOURSIF,  "FOURSIF\t704x480:1,47");
+	sizes.put(XmlRpcMcuClient.XGA,	    "XGA\t1024x768:1,33");
+	sizes.put(XmlRpcMcuClient.WVGA,	    "WVGA\t800x480:1,67");
+	sizes.put(XmlRpcMcuClient.DCIF,	    "DCIF\t528x384:1,38");
+	sizes.put(XmlRpcMcuClient.SIF,	    "SIF\t352x240:1,47");
+	sizes.put(XmlRpcMcuClient.QSIF,	    "QSIF\t176x120:1,47");
+	sizes.put(XmlRpcMcuClient.SD480P,   "SD480P\t480x360:1,33");
+	sizes.put(XmlRpcMcuClient.SQCIF,    "SQCIF\t128x96:1,33");
+	sizes.put(XmlRpcMcuClient.SCIF,	    "SCIF\t256x192:1,33");
         //Return map
         return sizes;
     }

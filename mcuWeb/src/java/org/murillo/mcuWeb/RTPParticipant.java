@@ -48,7 +48,9 @@ import javax.servlet.sip.SipURI;
 import javax.xml.bind.DatatypeConverter;
 import org.apache.xmlrpc.XmlRpcException;
 import org.murillo.MediaServer.Codecs;
+import org.murillo.MediaServer.Codecs.Direction;
 import org.murillo.MediaServer.Codecs.MediaType;
+import org.murillo.MediaServer.Codecs.Setup;
 import org.murillo.MediaServer.XmlRpcMcuClient;
 import org.murillo.MediaServer.XmlRpcMcuClient.MediaStatistics;
 import org.murillo.abnf.ParserException;
@@ -97,9 +99,6 @@ public class RTPParticipant extends Participant {
     private HashMap<String,HashMap<Integer,Integer>> rtpOutMediaMap = null;
     private HashMap<String,HashMap<String,Integer>> supportedExtensions = null;
     private HashMap<String,HashMap<String,Integer>> rtpExtensionMap = null;
-    private boolean isSendingAudio;
-    private boolean isSendingVideo;
-    private boolean isSendingText;
     private ArrayList<MediaDescription> rejectedMedias;
     private String videoContentType;
     private H264ProfileLevelID h264profileLevelId;
@@ -112,10 +111,13 @@ public class RTPParticipant extends Participant {
     private Boolean rtcpFeedBack;
     private HashMap<String,CryptoInfo> localCryptoInfo;
     private HashMap<String,CryptoInfo> remoteCryptoInfo;
+    private HashMap<String,DTLSInfo> remoteDTLSInfo;
     private boolean useICE;
     private HashMap<String,ICEInfo> localICEInfo;
     private HashMap<String,ICEInfo> remoteICEInfo;
     private HashMap<String,HashMap<String,String>> rtpMediaProperties;
+    private HashMap<String,Direction> rtpDirections;
+    private HashMap<String,Setup> rtpSetups;
     private boolean sessionTimersEnabled;
     private boolean timerSupported;
     private Integer sessionExpires;
@@ -123,9 +125,11 @@ public class RTPParticipant extends Participant {
     private SipURI proxy;
     private boolean useInfo;
     private boolean useUpdate;
+    private boolean useDTLS;
 
     public static final String ALLOWED = "INVITE, CANCEL, UPDATE, INFO, OPTIONS, BYE";
-
+    private String localFingerprint;
+    private String localHash = "SHA-256";
 
     private static class CryptoInfo
     {
@@ -158,6 +162,18 @@ public class RTPParticipant extends Participant {
             this.suite = suite;
             this.key = key;
         }
+    }
+
+    private static class DTLSInfo {
+	String setup;
+	String hash;
+	String fingerprint;
+
+	public DTLSInfo(String setup,String hash, String fingerprint) {
+   	    this.setup = setup;
+	    this.hash = hash;
+	    this.fingerprint = fingerprint;
+	}
     }
 
     private static class ICEInfo
@@ -197,10 +213,6 @@ public class RTPParticipant extends Participant {
     RTPParticipant(Integer id,String name,Integer mosaicId,Integer sidebarId,Conference conf) throws XmlRpcException {
         //Call parent
         super(id,name,mosaicId,sidebarId,conf,Type.SIP);
-        //Not sending
-        isSendingAudio = false;
-        isSendingVideo = false;
-        isSendingText = false;
         //No sending ports
         sendAudioPort = 0;
         sendVideoPort = 0;
@@ -236,9 +248,12 @@ public class RTPParticipant extends Participant {
         //Do no use info or update if not allowed explicitally
         useInfo = false;
         useUpdate = false;
+	//Do not use DTLS by default
+	useDTLS = false;
         //Create crypto info maps
         localCryptoInfo = new HashMap<String, CryptoInfo>();
         remoteCryptoInfo = new HashMap<String, CryptoInfo>();
+	remoteDTLSInfo = new HashMap<String, DTLSInfo>();
          //Create ICE info maps
         localICEInfo = new HashMap<String, ICEInfo>();
         remoteICEInfo = new HashMap<String, ICEInfo>();
@@ -248,6 +263,18 @@ public class RTPParticipant extends Participant {
         rtpMediaProperties.put("audio",new HashMap<String,String>());
         rtpMediaProperties.put("video",new HashMap<String,String>());
         rtpMediaProperties.put("text",new HashMap<String,String>());
+	//RTP directions
+        rtpDirections = new HashMap<String,Direction>(3);
+	//Ser default directions
+	rtpDirections.put("audio",Direction.SENDRECV);
+	rtpDirections.put("video",Direction.SENDRECV);
+	rtpDirections.put("text" ,Direction.SENDRECV);
+	//RTP setup
+	rtpSetups = new HashMap<String,Setup>(3);
+	//Actpass by default
+	rtpSetups.put("audio",Setup.ACTPASS);
+	rtpSetups.put("video",Setup.ACTPASS);
+	rtpSetups.put("text" ,Setup.ACTPASS);
 	//Map of extensions
 	supportedExtensions = new HashMap<String, HashMap<String, Integer>>();
 	//Create extensions for each media
@@ -264,7 +291,9 @@ public class RTPParticipant extends Participant {
 }
 
     @Override
-    public void restart() {
+    public void restart(Integer partId) {
+	//Store new id
+	id = partId;
         //Get mcu client
         XmlRpcMcuClient client = conf.getMCUClient();
         try {
@@ -433,6 +462,11 @@ public class RTPParticipant extends Participant {
         this.videoCodec = videoCodec;
     }
 
+    @Override
+    public Boolean isSending(String media) {
+	return rtpDirections.get(media).isSending();
+    }
+
     public String getLocation() {
         return location;
     }
@@ -443,6 +477,10 @@ public class RTPParticipant extends Participant {
 
     public void setIsSecure(Boolean isSecure) {
         this.isSecure = isSecure;
+    }
+
+    public void setUseDTLS(boolean useDTLS) {
+	this.useDTLS = useDTLS;
     }
 
     public void setUseICE(boolean useICE) {
@@ -467,7 +505,7 @@ public class RTPParticipant extends Participant {
             //Get conf id
             Integer confId = conf.getId();
             //If it is sending video
-            if (isSendingVideo)
+            if (getSendVideoPort()!=0)
             {
                 //Stop sending video
                 client.StopSending(confId, id, MediaType.VIDEO);
@@ -599,7 +637,7 @@ public class RTPParticipant extends Participant {
         MediaDescription md = new MediaDescription(mediaName,port,"RTP/"+rtpProfile);
 
         //Send and receive
-        md.addAttribute("sendrecv");
+        md.addAttribute(rtpDirections.get(mediaName).reverse().valueOf());
 
         //Enable rtcp muxing
         md.addAttribute("rtcp-mux");
@@ -641,13 +679,30 @@ public class RTPParticipant extends Participant {
             }
         }
 
+        //If we are secure
+	if (isSecure)
+	{
+	    //If we use dtls
+	    if (useDTLS)
+	    {
+		//Add fingerprint attribute
+		md.addAttribute(new FingerprintAttribute(localHash, localFingerprint));
+		//Get our setup
+		Setup setup = rtpSetups.get(mediaName);
+		//Add setup atttribute
+		md.addAttribute("setup",setup!=null?setup.valueOf():"passive");
+		//Add connection attribute
+		md.addAttribute("connection","new");
+	    } else {
         //Get Crypto info for local media
         CryptoInfo info = localCryptoInfo.get(mediaName);
 
         //f we have crytpo info
         if (info!=null)
             //Append attribute
-            md.addAttribute( new CryptoAttribute(1, info.suite, "inline", info.key));
+		    md.addAttribute(new CryptoAttribute(1, info.suite, "inline", info.key));
+	    }
+	}
 
         //Only for webrtc participants
         if (rtcpFeedBack)
@@ -889,10 +944,6 @@ public class RTPParticipant extends Participant {
             if (band.getType().equalsIgnoreCase("TIAS"))
                     //Convert to kbps
                     rate = rate/1000;
-            //Check bandwith type
-            if (band.getBandwidth().equalsIgnoreCase("TIAS"))
-                    //Convert to kbps
-                    videoBitrate = videoBitrate/1000;
             // Let some room for audio.
             if (rate>=128)
                 //Remove maximum rate
@@ -916,6 +967,23 @@ public class RTPParticipant extends Participant {
             remoteICEFrag = ufragAtrr.getValue();
             remtoeICEPwd = pwdAttr.getValue();
         }
+
+	//No DTLS fingerprint yet
+	String remoteHash = null;
+	String remoteFingerprint = null;
+
+	//Check global fingerprint attribute
+	FingerprintAttribute fingerprintAttr = (FingerprintAttribute) sdp.getAttribute("fingerprint");
+
+	//Check if there is one preset
+	if (fingerprintAttr!=null)
+	{
+	    //Using DTLS
+	    useDTLS = true;
+	    //Get remote fingerprint
+	    remoteHash	      = fingerprintAttr.getHashFunc();
+	    remoteFingerprint = fingerprintAttr.getFingerprint();
+	}
 
         for (MediaDescription md : sdp.getMedias())
         {
@@ -959,9 +1027,25 @@ public class RTPParticipant extends Participant {
             }
 
             //Check if it supports rtcp-muxing
-            //if (md.hasAttribute("rtcp-mux"))
+            if (md.hasAttribute("rtcp-mux"))
                 //Add attribute
-                //rtpMediaProperties.get(media).put("rtcp-mux", "1");
+                rtpMediaProperties.get(media).put("rtcp-mux", "1");
+
+	    //Check direction attributes
+	    if (md.hasAttribute("sendonly"))
+	    {
+		//Part is sendonly
+		rtpDirections.put(media, Direction.SENDONLY);
+	    } else if (md.hasAttribute("recvonly")) {
+		//Part is recvonly
+		rtpDirections.put(media, Direction.RECVONLY);
+	    } else if (md.hasAttribute("inactive")) {
+		//Part is inactive
+		rtpDirections.put(media, Direction.INACTIVE);
+	    } else {
+		//Part is sendrecv
+		rtpDirections.put(media, Direction.SENDRECV);
+	    }
 
             //Add support for the media
             if (media.equals("audio")) {
@@ -1038,15 +1122,53 @@ public class RTPParticipant extends Participant {
 
             //Get rtp profile
             String rtpProfile = proto.get(1);
+	    //Check if it is DTLS
+	    if (rtpProfile.equals("TLS"))
+	    {
+		    //Using DTLS
+		    useDTLS = true;
+		    //Get profile
+		    rtpProfile = proto.get(2);
+	    }
             //Check if it is secure
             if (rtpProfile.startsWith("S"))
             {
                 //Secure (WARNING: if one media is secure, all will be secured, FIX!!)
                 isSecure = true;
-                //Get crypto header
+
+		//Check media fingerprint attribute
+		fingerprintAttr = (FingerprintAttribute) md.getAttribute("fingerprint");
+
+		//Check if DTLS is available
+		if (fingerprintAttr!=null)
+		{
+		    //Using DTLS
+		    useDTLS = true;
+		    //Get remote fingerprint and hash
+		    remoteHash	      = fingerprintAttr.getHashFunc();
+		    remoteFingerprint = fingerprintAttr.getFingerprint();
+		}
+
+		//If we have fingerprint
+		if (useDTLS)
+		{
+		    //Set deault setup
+		    String setup = "actpass";
+		    //Get setup attribute
+		    Attribute attr = md.getAttribute("setup");
+		    //Chekc it
+		    if (attr!=null)
+			//Set it
+			setup = attr.getValue();
+		    //Create new DTLS info
+		    remoteDTLSInfo.put(media, new DTLSInfo(setup,remoteHash,remoteFingerprint));
+		    //Set ur setup as reverese of remote
+		    rtpSetups.put(media, Setup.byValue(setup).reverse());
+		} else {
+		    //Check crypto attribute
                 CryptoAttribute crypto = (CryptoAttribute) md.getAttribute("crypto");
 
-				//Check SDES key
+		//Check SDES key
                 if (crypto!=null)
                 {
                     //Create media crypto params
@@ -1058,6 +1180,7 @@ public class RTPParticipant extends Participant {
                     //Add it
                     remoteCryptoInfo.put(media, info);
                 }
+            }
             }
             //Check if has rtcp
             if (rtpProfile.endsWith("F"))
@@ -1136,7 +1259,7 @@ public class RTPParticipant extends Participant {
                 } else {
                     //Static, put it in the map
                     rtpOutMediaMap.get(media).put(type,type);
-            }
+		}
             }
 
             //Check if we have type for h264
@@ -1260,39 +1383,39 @@ public class RTPParticipant extends Participant {
             if (remoteMediaICEFrag!=null && remtoeMediaICEPwd!=null)
                     //Create info and add to remote ones
                     remoteICEInfo.put(media, new ICEInfo(remoteMediaICEFrag,remtoeMediaICEPwd));
-		    //Get extmap atrributes
-		    ArrayList<Attribute> extmaps = md.getAttributes("extmap");
-		    //Get supported extensions
-		    HashMap<String, Integer> supported = supportedExtensions.get(media);
-		    //If some extensions are supported for this media
-		    if (supported!=null)
+	    //Get extmap atrributes
+	    ArrayList<Attribute> extmaps = md.getAttributes("extmap");
+	    //Get supported extensions
+	    HashMap<String, Integer> supported = supportedExtensions.get(media);
+	    //If some extensions are supported for this media
+	    if (supported!=null)
+	    {
+		boolean offer = false;
+		//If it has not been created yet
+		if (rtpExtensionMap.containsKey(media))
+		{
+		    //Set it
+		    rtpExtensionMap.put(media, new HashMap<String, Integer>());
+		    //The SDP is an offer
+		    offer = true;
+		}
+		//For each one
+		for (Attribute attr : extmaps)
+		{
+		    //Cast
+		    ExtMapAttribute extmap = (ExtMapAttribute) attr;
+		    //Check if it is supperted
+		    if (supported.containsKey(extmap.getName()))
 		    {
-				boolean offer = false;
-				//If it has not been created yet
-				if (rtpExtensionMap.containsKey(media))
-				{
-				    //Set it
-				    rtpExtensionMap.put(media, new HashMap<String, Integer>());
-				    //The SDP is an offer
-				    offer = true;
-		        }
-				//For each one
-				for (Attribute attr : extmaps)
-				{
-				    //Cast
-				    ExtMapAttribute extmap = (ExtMapAttribute) attr;
-				    //Check if it is supperted
-				    if (supported.containsKey(extmap.getName()))
-				    {
-					//If it is an offer
-					if (offer)
-					    //Add it also to the outgoing SDP extmap
-					    rtpExtensionMap.get(media).put(extmap.getName(), extmap.getId());
-					//Add to the
-					rtpMediaProperties.get(media).put(extmap.getName(), extmap.getId().toString());
-				    }
-				}
+			//If it is an offer
+			if (offer)
+			    //Add it also to the outgoing SDP extmap
+			    rtpExtensionMap.get(media).put(extmap.getName(), extmap.getId());
+			//Add to the
+			rtpMediaProperties.get(media).put(extmap.getName(), extmap.getId().toString());
 		    }
+		}
+	    }
         }
         return sdp;
     }
@@ -1320,7 +1443,7 @@ public class RTPParticipant extends Participant {
             SipServletResponse resp = request.createResponse(200, "Ok");
             //Send it
             resp.send();
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
         }
         //Disconnect
@@ -1397,7 +1520,7 @@ public class RTPParticipant extends Participant {
                     expire = expire.substring(0, i);
                 //Parse
                 sessionExpires = Integer.parseInt(expire);
-        }
+	    }
         }
         //Get allow header
         String allowHeader = inviteRequest.getHeader("Allow");
@@ -1503,7 +1626,7 @@ public class RTPParticipant extends Participant {
                 //Log
                 Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
                 //Not supported yet
-                request.createResponse(500, "SDP error"+ex.getReason()).send();
+                request.createResponse(500, "SDP error "+ex.getReason()).send();
                 //Exit
                 return;
             }
@@ -1535,8 +1658,9 @@ public class RTPParticipant extends Participant {
             startReceiving();
             //Create final response
             SipServletResponse resp = inviteRequest.createResponse(200, "Ok");
-            //Add custom header with conf id
+            //Add custom headers with conf id and participant id
             resp.addHeader("X-Conference-ID", conf.getUID());
+	    resp.addHeader("X-Participant-ID", id.toString());
             //Check session refresh request
             if (timerSupported && sessionExpires>0)
             {
@@ -1615,7 +1739,7 @@ public class RTPParticipant extends Participant {
         doInvite(sf,from,to,null,1,null);
     }
 
-    void doInvite(SipFactory sf, Address from,Address to,int timeout) throws IOException, XmlRpcException {
+    void doInvite(SipFactory sf, Address from,Address to,int timeout) throws XmlRpcException {
         doInvite(sf,from,to,null,timeout,null);
     }
 
@@ -1636,8 +1760,9 @@ public class RTPParticipant extends Participant {
             appSession = sf.createApplicationSession();
             // create an INVITE request to the first party from the second
             inviteRequest = sf.createRequest(appSession, "INVITE", from, to);
-                //Add custom header with conf id
-                inviteRequest.addHeader("X-Conference-ID", conf.getUID());
+            //Add custom headers with conf id and participant id
+            inviteRequest.addHeader("X-Conference-ID", conf.getUID());
+	    inviteRequest.addHeader("X-Participant-ID", id.toString());
             //Check if we have a proxy
             if (proxy!=null)
                 //Set proxy
@@ -2032,6 +2157,8 @@ public class RTPParticipant extends Participant {
         try {
             //Get client
             XmlRpcMcuClient client = conf.getMCUClient();
+	    //Update stats
+	    stats = client.getParticipantStatistics(conf.getId(), id);
             //Delete participant
             client.DeleteParticipant(conf.getId(), id);
         } catch (XmlRpcException ex) {
@@ -2064,6 +2191,28 @@ public class RTPParticipant extends Participant {
         setState(State.DESTROYED);
     }
 
+    public void stopSending() throws XmlRpcException {
+	//Get client
+        XmlRpcMcuClient client = conf.getMCUClient();
+        //Get conf id
+        Integer confId = conf.getId();
+
+        //Check audio
+        if (getSendAudioPort()!=0 && rtpDirections.get("audio").isReceving())
+            //Stop sending
+            client.StopSending(confId, id, MediaType.AUDIO);
+
+        //Check video
+        if (getSendVideoPort()!=0 && rtpDirections.get("video").isReceving())
+	    //Stop sending
+            client.StopSending(confId, id, MediaType.VIDEO);
+
+        //Check text
+        if (getSendTextPort()!=0 && rtpDirections.get("text").isReceving())
+	    //Stop sending
+            client.StopSending(confId, id, MediaType.TEXT);
+    }
+
     public void startSending() throws XmlRpcException {
         //Get client
         XmlRpcMcuClient client = conf.getMCUClient();
@@ -2071,18 +2220,16 @@ public class RTPParticipant extends Participant {
         Integer confId = conf.getId();
 
         //Check audio
-        if (getSendAudioPort()!=0)
+        if (getSendAudioPort()!=0 && rtpDirections.get("audio").isReceving())
         {
             //Set codec
             client.SetAudioCodec(confId, id, getAudioCodec());
             //Send
             client.StartSending(confId, id, MediaType.AUDIO, getSendAudioIp(), getSendAudioPort(), getRtpOutMediaMap("audio"));
-            //Sending Audio
-            isSendingAudio = true;
         }
 
         //Check video
-        if (getSendVideoPort()!=0)
+        if (getSendVideoPort()!=0 && rtpDirections.get("video").isReceving())
         {
             //Get profile bitrat
             int bitrate = profile.getVideoBitrate();
@@ -2100,19 +2247,15 @@ public class RTPParticipant extends Participant {
             client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize() , profile.getVideoFPS(), bitrate,profile.getIntraPeriod(),params);
             //Send
             client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
-            //Sending Video
-            isSendingVideo = true;
         }
 
         //Check text
-        if (getSendTextPort()!=0)
+        if (getSendTextPort()!=0 && rtpDirections.get("text").isReceving())
         {
             //Set codec
             client.SetTextCodec(confId, id, getTextCodec());
             //Send
             client.StartSending(confId, id, MediaType.TEXT, getSendTextIp(), getSendTextPort(), getRtpOutMediaMap("text"));
-            //Sending Text
-            isSendingText = true;
         }
     }
 
@@ -2122,8 +2265,13 @@ public class RTPParticipant extends Participant {
         //Get conf id
         Integer confId = conf.getId();
 
-        //If supported
-        if (getAudioSupported())
+	//Check if using DTLS
+	if (useDTLS)
+	    //Get fingerprint
+	    localFingerprint = client.GetLocalCryptoDTLSFingerprint(localHash);
+
+        //If supported and not already receiving
+        if (getAudioSupported() && recAudioPort==0)
         {
             //Create rtp map for audio
             createRTPMap("audio");
@@ -2152,7 +2300,7 @@ public class RTPParticipant extends Participant {
         }
 
         //If supported
-        if (getVideoSupported())
+        if (getVideoSupported() && recVideoPort==0)
         {
             //Create rtp map for video
             createRTPMap("video");
@@ -2181,7 +2329,7 @@ public class RTPParticipant extends Participant {
         }
 
         //If supported
-        if (getTextSupported())
+        if (getTextSupported() && recTextPort==0)
         {
             //Create rtp map for text
             createRTPMap("text");
@@ -2248,6 +2396,8 @@ public class RTPParticipant extends Participant {
     }
 
     private void onSDPNegotiationDone() throws XmlRpcException {
+	//Log it
+	Logger.getLogger(RTPParticipant.class.getName()).log(Level.INFO, "onSDPNegotiationDone videoBitrate:{0}", videoBitrate);
         //Get client
         XmlRpcMcuClient client = conf.getMCUClient();
         //Get conf id
@@ -2256,12 +2406,25 @@ public class RTPParticipant extends Participant {
         //If supported
         if (getAudioSupported())
         {
+
+	    //Check if DTLS enabled
+	    if (useDTLS)
+	    {
             //Get cryto info
+		DTLSInfo info = remoteDTLSInfo.get("audio");
+		//If present
+		if (info!=null)
+		    //Set it
+		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.AUDIO, info.setup, info.hash, info.fingerprint);
+	    } else {
+		//Get cryto info
             CryptoInfo info = remoteCryptoInfo.get("audio");
             //If present
             if (info!=null)
                 //Set it
                client.SetRemoteCryptoSDES(confId, id, MediaType.AUDIO, info.suite, info.key);
+	    }
+
             //Get ice info
             ICEInfo ice = remoteICEInfo.get("audio");
             //If present
@@ -2275,12 +2438,24 @@ public class RTPParticipant extends Participant {
         //If supported
         if (getVideoSupported())
         {
+	    //Check if DTLS enabled
+	    if (useDTLS)
+	    {
             //Get cryto info
+		DTLSInfo info = remoteDTLSInfo.get("video");
+		//If present
+		if (info!=null)
+		    //Set it
+		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.VIDEO, info.setup, info.hash, info.fingerprint);
+	    } else {
+		//Get cryto info
             CryptoInfo info = remoteCryptoInfo.get("video");
             //If present
             if (info!=null)
                 //Set it
                client.SetRemoteCryptoSDES(confId, id, MediaType.VIDEO, info.suite, info.key);
+	    }
+
                         //Get ice info
             ICEInfo ice = remoteICEInfo.get("video");
             //If present
@@ -2294,12 +2469,23 @@ public class RTPParticipant extends Participant {
         //If supported
         if (getTextSupported())
         {
+	    //Check if DTLS enabled
+	    if (useDTLS)
+	    {
             //Get cryto info
+		DTLSInfo info = remoteDTLSInfo.get("text");
+		//If present
+		if (info!=null)
+		    //Set it
+		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.TEXT, info.setup, info.hash, info.fingerprint);
+	    } else {
+		//Get cryto info
             CryptoInfo info = remoteCryptoInfo.get("text");
             //If present
             if (info!=null)
                 //Set it
                client.SetRemoteCryptoSDES(confId, id, MediaType.TEXT, info.suite, info.key);
+	    }
             //Get ice info
             ICEInfo ice = remoteICEInfo.get("text");
             //If present
