@@ -51,23 +51,28 @@ public class XmlRpcMcuClient {
         public Integer numPart;
     }
     
-    public static final Integer QCIF    = 0;
-    public static final Integer CIF     = 1;
-    public static final Integer VGA     = 2;
-    public static final Integer PAL     = 3;
-    public static final Integer HVGA    = 4;
-    public static final Integer QVGA    = 5;
-    public static final Integer HD720P  = 6;
-    public static final Integer WQVGA	= 7;	// 400  x 240
-    public static final Integer w448P   = 8;	// 768  x 448
-    public static final Integer sd448P  = 9;	// 576  x 448
-    public static final Integer w288P   = 10;	// 512  x 288
-    public static final Integer w576    = 11;	// 1024 x 576
-    public static final Integer FOURCIF = 12;	// 704  x 576
-    public static final Integer FOURSIF = 13;	// 704  x 576
-    public static final Integer XGA     = 14;	// 1024 x 768
-    public static final Integer WVGA    = 15;	// 800  x 480
-    public static final Integer DCIF    = 16;	// 528  x  384
+    public static final Integer QCIF	= 0;  // 176  x 144 	AR:	1,222222222
+    public static final Integer CIF	= 1;  // 352  x 288	AR:	1,222222222
+    public static final Integer VGA	= 2;  // 640  x 480	AR:	1,333333333
+    public static final Integer PAL	= 3;  // 768  x 576	AR:	1,333333333
+    public static final Integer HVGA	= 4;  // 480  x 320	AR:	1,5
+    public static final Integer QVGA	= 5;  // 320  x 240	AR:	1,333333333
+    public static final Integer HD720P	= 6;  // 1280 x 720	AR:	1,777777778
+    public static final Integer WQVGA	= 7;  // 400  x 240	AR:	1,666666667
+    public static final Integer W448P	= 8;  // 768  x 448	AR:	1,714285714
+    public static final Integer SD448P	= 9;  // 576  x 448	AR:	1,285714286
+    public static final Integer W288P	= 10; // 512  x 288	AR:	1,777777778
+    public static final Integer W576	= 11; // 1024 x 576	AR:	1,777777778
+    public static final Integer FOURCIF	= 12; // 704  x 576	AR:	1,222222222
+    public static final Integer FOURSIF	= 13; // 704  x 480	AR:	1,466666667
+    public static final Integer XGA	= 14; // 1024 x 768	AR:	1,333333333
+    public static final Integer WVGA	= 15; // 800  x 480	AR:	1,666666667
+    public static final Integer DCIF	= 16; // 528  x 384	AR:	1,375
+    public static final Integer SIF	= 17; // 352  x 240	AR:	1,466666667
+    public static final Integer QSIF	= 18; // 176  x 120	AR:	1,466666667
+    public static final Integer SD480P	= 19; // 480  x 360	AR:	1,333333333
+    public static final Integer SQCIF	= 20; // 128  x 96	AR:	1,333333333
+    public static final Integer SCIF	= 21; // 256  x 192	AR:	1,333333333
     
     public static final Integer MOSAIC1x1   = 0;
     public static final Integer MOSAIC2x2   = 1;
@@ -121,7 +126,7 @@ public class XmlRpcMcuClient {
             case 9:
                 return 16;
             case 10:
-                return 20;
+                return 5;
         }
         
         return -1;
