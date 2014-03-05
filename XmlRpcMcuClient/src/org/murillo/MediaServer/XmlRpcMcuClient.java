@@ -359,7 +359,7 @@ public class XmlRpcMcuClient {
         return (((Integer)response.get("returnCode"))==1);
     }
 
-     public boolean SetLocalSTUNCredentials(Integer confId,Integer partId,MediaType media,String username,String pwd) throws XmlRpcException
+    public boolean SetLocalSTUNCredentials(Integer confId,Integer partId,MediaType media,String username,String pwd) throws XmlRpcException
     {
         //Create request
         Object[] request = new Object[]{confId,partId,media.valueOf(),username,pwd};
