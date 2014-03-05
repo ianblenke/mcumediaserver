@@ -33,7 +33,7 @@ import org.murillo.mscontrol.resource.ContainerImpl;
 import org.murillo.mscontrol.MediaServer;
 import org.murillo.mscontrol.MediaSessionImpl;
 import org.murillo.mscontrol.mediagroup.PlayerImpl;
-import org.murillo.mscrontrol.resource.video.VideoRendererImpl;
+import org.murillo.mscontrol.resource.video.VideoRendererImpl;
 
 /**
  *

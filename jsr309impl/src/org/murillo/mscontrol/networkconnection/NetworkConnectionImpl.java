@@ -95,111 +95,151 @@ public class NetworkConnectionImpl extends ContainerImpl implements NetworkConne
 
     void startReceiving(SdpPortManagerImpl sdp) throws MsControlException
     {
-        //Get media server
-        MediaServer mediaServer = session.getMediaServer();
-        //If supported
-        if (sdp.getAudioSupported())
-        {
-            try {
-                //Create rtp map for audio
+	try {
+	    //Check if using DTLS
+	    if (sdp.getUseDTLS())
+	    {
+		//Get fingerprint
+		String localFingerprint = mediaServer.EndpointGetLocalCryptoDTLSFingerprint(sdp.getLocalHash());
+		//Set it
+		sdp.setLocalFingerprint(localFingerprint);
+	    }
+
+	    //If supported and not already receiving
+	    if (sdp.getAudioSupported() && sdp.getRecAudioPort()==0)
+	    {
+		//Check if we are secure
+		if (sdp.getIsSecure())
+		{
+		    //Create new cypher
+		    CryptoInfo info = CryptoInfo.Generate();
+		    //Set it
+		    mediaServer.EndpointSetLocalCryptoSDES(session.getSessionId(), endpointId,  MediaType.AUDIO, info.suite, info.key);
+		    //Set it
+		    sdp.setLocalCryptoInfo("audio",info);
+		}
+
+		//Check if using ICE
+		if (sdp.getUseIce())
+		{
+		    //Create new ICE Info
+		    ICEInfo info = ICEInfo.Generate();
+		    //Set them
+		    mediaServer.EndpointSetLocalSTUNCredentials(session.getSessionId(), endpointId, MediaType.AUDIO, info.ufrag, info.pwd);
+		    //Set it
+		    sdp.setLocalIceInfo("audio", info);
+		}
+		//Create rtp map for audio
                 sdp.createRTPMap("audio");
                 //Get receiving ports
                 Integer recAudioPort = mediaServer.EndpointStartReceiving(session.getSessionId(), endpointId, MediaType.AUDIO, sdp.getRtpInMediaMap("audio"));
                 //Set ports
                 sdp.setRecAudioPort(recAudioPort);
-            } catch (XmlRpcException ex) {
-                Logger.getLogger(NetworkConnectionImpl.class.getName()).log(Level.SEVERE, null, ex);
-                 //Trhow it
-                throw new MsControlException("Could not start receiving audio",ex);
-            }
-        }
+	    }
 
-        //If supported
-        if (sdp.getVideoSupported())
-        {
-            try {
-                //Create rtp map for video
+	    //If supported and not already receiving
+	    if (sdp.getVideoSupported() && sdp.getRecVideoPort()==0)
+	    {
+		//Check if we are secure
+		if (sdp.getIsSecure())
+		{
+		    //Create new cypher
+		    CryptoInfo info = CryptoInfo.Generate();
+		    //Set it
+		    mediaServer.EndpointSetLocalCryptoSDES(session.getSessionId(), endpointId,  MediaType.VIDEO, info.suite, info.key);
+		    //Set it
+		    sdp.setLocalCryptoInfo("video",info);
+		}
+
+		//Check if using ICE
+		if (sdp.getUseIce())
+		{
+		    //Create new ICE Info
+		    ICEInfo info = ICEInfo.Generate();
+		    //Set them
+		    mediaServer.EndpointSetLocalSTUNCredentials(session.getSessionId(), endpointId, MediaType.VIDEO, info.ufrag, info.pwd);
+		    //Set it
+		    sdp.setLocalIceInfo("video", info);
+		}
+		//Create rtp map for video
                 sdp.createRTPMap("video");
                 //Get receiving ports
                 Integer recVideoPort = mediaServer.EndpointStartReceiving(session.getSessionId(), endpointId, MediaType.VIDEO, sdp.getRtpInMediaMap("video"));
                 //Set ports
                 sdp.setRecVideoPort(recVideoPort);
-            } catch (XmlRpcException ex) {
-                Logger.getLogger(NetworkConnectionImpl.class.getName()).log(Level.SEVERE, null, ex);
-                //Trhow it
-                throw new MsControlException("Could not start receiving video",ex);
-            }
-        }
+	    }
 
-        //If supported
-        if (sdp.getTextSupported())
-        {
-            try {
-                //Create rtp map for text
+	    //If supported and not already receiving
+	    if (sdp.getTextSupported() && sdp.getRecTextPort()==0)
+	    {
+		//Check if we are secure
+		if (sdp.getIsSecure())
+		{
+		    //Create new cypher
+		    CryptoInfo info = CryptoInfo.Generate();
+		    //Set it
+		    mediaServer.EndpointSetLocalCryptoSDES(session.getSessionId(), endpointId,  MediaType.TEXT, info.suite, info.key);
+		    //Set it
+		    sdp.setLocalCryptoInfo("text",info);
+		}
+
+		//Check if using ICE
+		if (sdp.getUseIce())
+		{
+		    //Create new ICE Info
+		    ICEInfo info = ICEInfo.Generate();
+		    //Set them
+		    mediaServer.EndpointSetLocalSTUNCredentials(session.getSessionId(), endpointId, MediaType.TEXT, info.ufrag, info.pwd);
+		    //Set it
+		    sdp.setLocalIceInfo("text", info);
+		}
+		//Create rtp map for text
                 sdp.createRTPMap("text");
                 //Get receiving ports
                 Integer recTextPort = mediaServer.EndpointStartReceiving(session.getSessionId(), endpointId, MediaType.TEXT, sdp.getRtpInMediaMap("text"));
                 //Set ports
                 sdp.setRecTextPort(recTextPort);
-            } catch (XmlRpcException ex) {
-                Logger.getLogger(NetworkConnectionImpl.class.getName()).log(Level.SEVERE, null, ex);
-                //Trhow it
-                throw new MsControlException("Could not start receiving text",ex);
-            }
-        }
+	    }
 
-        //And set the sender ip
-        sdp.setRecIp(mediaServer.getIp());
+	    //And set the sender ip
+	    sdp.setRecIp(mediaServer.getIp());
+	} catch (XmlRpcException ex) {
+	    Logger.getLogger(NetworkConnectionImpl.class.getName()).log(Level.SEVERE, null, ex);
+	    //Trhow it
+	    throw new MsControlException("Could not start receiving audio",ex);
+        }
     }
 
-    protected void startSending(SdpPortManagerImpl sdp) throws MsControlException
+    protected void startSending(SdpPortManagerImpl sdp) throws MsControlException, XmlRpcException
     {
-        //Get media server
-        MediaServer mediaServer = session.getMediaServer();
         //Check audio
         if (sdp.getSendAudioPort()!=0)
-            //Send
-            try {
-                //Get the auido stream
-                NetworkConnectionJoinableStream stream = (NetworkConnectionJoinableStream)getJoinableStream(StreamType.audio);
-                //Update ssetAudioCodecneding codec
-                stream.requestAudioCodec(sdp.getAudioCodec());
-                //Send
-                mediaServer.EndpointStartSending(session.getSessionId(), endpointId, MediaType.AUDIO, sdp.getSendAudioIp(), sdp.getSendAudioPort(), sdp.getRtpOutMediaMap("audio"));
-            } catch (XmlRpcException ex) {
-                Logger.getLogger(NetworkConnectionImpl.class.getName()).log(Level.SEVERE, null, ex);
-                //Trhow it
-                throw new MsControlException("Could not start sending audio",ex);
-            }
+	{
+	    //Get the auido stream
+	    NetworkConnectionJoinableStream stream = (NetworkConnectionJoinableStream)getJoinableStream(StreamType.audio);
+	    //Update ssetAudioCodecneding codec
+	    stream.requestAudioCodec(sdp.getAudioCodec());
+	    //Send
+	    mediaServer.EndpointStartSending(session.getSessionId(), endpointId, MediaType.AUDIO, sdp.getSendAudioIp(), sdp.getSendAudioPort(), sdp.getRtpOutMediaMap("audio"));
+        }
 
         //Check video
         if (sdp.getSendVideoPort()!=0)
-            //Send
-            try {
-                //Get the auido stream
-                NetworkConnectionJoinableStream stream = (NetworkConnectionJoinableStream)getJoinableStream(StreamType.video);
-                //Update sneding codec
-                stream.requestVideoCodec(sdp.getVideoCodec());
-                //Send
-                mediaServer.EndpointStartSending(session.getSessionId(), endpointId, MediaType.VIDEO, sdp.getSendVideoIp(), sdp.getSendVideoPort(), sdp.getRtpOutMediaMap("video"));
-            } catch (XmlRpcException ex) {
-                Logger.getLogger(NetworkConnectionImpl.class.getName()).log(Level.SEVERE, null, ex);
-                //Trhow it
-                throw new MsControlException("Could not start sending video",ex);
-            }
-
+	{
+	    //Get the auido stream
+	    NetworkConnectionJoinableStream stream = (NetworkConnectionJoinableStream)getJoinableStream(StreamType.video);
+	    //Update sneding codec
+	    stream.requestVideoCodec(sdp.getVideoCodec());
+	    //Send
+	    mediaServer.EndpointStartSending(session.getSessionId(), endpointId, MediaType.VIDEO, sdp.getSendVideoIp(), sdp.getSendVideoPort(), sdp.getRtpOutMediaMap("video"));
+	}
 
         //Check text
         if (sdp.getSendTextPort()!=0)
-            //Send
-            try {
-                //Send
-                mediaServer.EndpointStartSending(session.getSessionId(), endpointId, MediaType.TEXT, sdp.getSendTextIp(), sdp.getSendTextPort(), sdp.getRtpOutMediaMap("text"));
-            } catch (XmlRpcException ex) {
-                Logger.getLogger(NetworkConnectionImpl.class.getName()).log(Level.SEVERE, null, ex);
-                //Trhow it
-                throw new MsControlException("Could not start sending text",ex);
-            }
+	{
+	    //Send
+	    mediaServer.EndpointStartSending(session.getSessionId(), endpointId, MediaType.TEXT, sdp.getSendTextIp(), sdp.getSendTextPort(), sdp.getRtpOutMediaMap("text"));
+        }
     }
 
     @Override
@@ -230,8 +270,6 @@ public class NetworkConnectionImpl extends ContainerImpl implements NetworkConne
     public void release() {
         //Free joins
         releaseJoins();
-        //Get media server
-        MediaServer mediaServer = session.getMediaServer();
         try {
             //Delete endpoint
             mediaServer.EndpointDelete(session.getSessionId(),endpointId);
@@ -249,4 +287,106 @@ public class NetworkConnectionImpl extends ContainerImpl implements NetworkConne
     public <T extends MediaObject> Iterator<T> getMediaObjects(Class<T> type) {
         throw new UnsupportedOperationException("Not supported yet.");
     }
+
+    public void onSDPNegotiationDone(SdpPortManagerImpl sdp) throws XmlRpcException {
+	
+        //Get conf id
+        Integer sessId = session.getSessionId();
+
+        //If supported
+        if (sdp.getAudioSupported())
+        {
+
+	    //Check if DTLS enabled
+	    if (sdp.getUseDTLS())
+	    {
+		//Get cryto info
+		DTLSInfo info = sdp.getRemoteDTLSInfo("audio");
+		//If present
+		if (info!=null)
+		    //Set it
+		    mediaServer.EndpointSetRemoteCryptoDTLS(sessId, endpointId, MediaType.AUDIO, info.setup, info.hash, info.fingerprint);
+	    } else {
+		//Get cryto info
+		CryptoInfo info = sdp.getRemoteCryptoInfo("audio");
+		//If present
+		if (info!=null)
+                    //Set it
+	           mediaServer.EndpointSetRemoteCryptoSDES(sessId, endpointId, MediaType.AUDIO, info.suite, info.key);
+	    }
+
+            //Get ice info
+            ICEInfo ice = sdp.getRemoteICEInfo("audio");
+            //If present
+            if (ice!=null)
+                //Set it
+               mediaServer.EndpointSetRemoteSTUNCredentials(sessId, endpointId, MediaType.AUDIO, ice.ufrag, ice.pwd);
+            //Set RTP properties
+            mediaServer.EndpointSetRTPProperties(sessId, endpointId, MediaType.AUDIO, sdp.getRTPMediaProperties("audio"));
+        }
+
+        //If supported
+        if (sdp.getVideoSupported())
+        {
+
+	    //Check if DTLS enabled
+	    if (sdp.getUseDTLS())
+	    {
+		//Get cryto info
+		DTLSInfo info = sdp.getRemoteDTLSInfo("video");
+		//If present
+		if (info!=null)
+		    //Set it
+		    mediaServer.EndpointSetRemoteCryptoDTLS(sessId, endpointId, MediaType.VIDEO, info.setup, info.hash, info.fingerprint);
+	    } else {
+		//Get cryto info
+		CryptoInfo info = sdp.getRemoteCryptoInfo("video");
+		//If present
+		if (info!=null)
+                    //Set it
+	           mediaServer.EndpointSetRemoteCryptoSDES(sessId, endpointId, MediaType.VIDEO, info.suite, info.key);
+	    }
+
+            //Get ice info
+            ICEInfo ice = sdp.getRemoteICEInfo("video");
+            //If present
+            if (ice!=null)
+                //Set it
+               mediaServer.EndpointSetRemoteSTUNCredentials(sessId, endpointId, MediaType.VIDEO, ice.ufrag, ice.pwd);
+            //Set RTP properties
+            mediaServer.EndpointSetRTPProperties(sessId, endpointId, MediaType.VIDEO, sdp.getRTPMediaProperties("video"));
+        }
+
+        //If supported
+        if (sdp.getTextSupported())
+        {
+	    //Check if DTLS enabled
+	    if (sdp.getUseDTLS())
+	    {
+		//Get cryto info
+		DTLSInfo info = sdp.getRemoteDTLSInfo("text");
+		//If present
+		if (info!=null)
+		    //Set it
+		    mediaServer.EndpointSetRemoteCryptoDTLS(sessId, endpointId, MediaType.TEXT, info.setup, info.hash, info.fingerprint);
+	    } else {
+		//Get cryto info
+		CryptoInfo info = sdp.getRemoteCryptoInfo("text");
+		//If present
+		if (info!=null)
+                    //Set it
+	           mediaServer.EndpointSetRemoteCryptoSDES(sessId, endpointId, MediaType.TEXT, info.suite, info.key);
+	    }
+
+            //Get ice info
+            ICEInfo ice = sdp.getRemoteICEInfo("text");
+            //If present
+            if (ice!=null)
+                //Set it
+               mediaServer.EndpointSetRemoteSTUNCredentials(sessId, endpointId, MediaType.TEXT, ice.ufrag, ice.pwd);
+            //Set RTP properties
+            mediaServer.EndpointSetRTPProperties(sessId, endpointId, MediaType.TEXT, sdp.getRTPMediaProperties("text"));
+        }
+    }
+    
 }

@@ -93,7 +93,7 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
             //Should not be null
             throw new MsControlException("NetworkConnection Configuration cannot be null");
         //Get uid
-        String uid = "NC." + UUID.randomUUID().toString().replace("-", "");
+        String uid = "NetworkConnections/" + UUID.randomUUID().toString().replace("-", "");
         //Check id
         if (params!=null && params.containsKey(MEDIAOBJECT_ID))
             //Set it
@@ -116,7 +116,7 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
             //Should not be null
             throw new MsControlException("NetworkConnection MediaConfig cannot be null");
         //Get uid
-        String uid = "NC." + UUID.randomUUID().toString().replace("-", "");
+        String uid = "NetworConnections/" + UUID.randomUUID().toString().replace("-", "");
                 //Check id
         if (params!=null && params.containsKey(MEDIAOBJECT_ID))
             //Set it
@@ -144,7 +144,7 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
             //Should not be null
             throw new MsControlException("MediaGroup configuration cannot be null");
         //Get uid
-        String uid = "MG." + UUID.randomUUID().toString().replace("-", "");
+        String uid = "MediaGroups/" + UUID.randomUUID().toString().replace("-", "");
         //Check id
         if (params!=null && params.containsKey(MEDIAOBJECT_ID))
             //Set it
@@ -162,7 +162,7 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
     @Override
     public MediaGroup createMediaGroup(MediaConfig config, Parameters params) throws MsControlException {
         //Get uid
-        String uid = "MG." + UUID.randomUUID().toString().replace("-", "");
+        String uid = "MediaGroups/" + UUID.randomUUID().toString().replace("-", "");
         //Check id
         if (params!=null && params.containsKey(MEDIAOBJECT_ID))
             //Set it
@@ -194,7 +194,7 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
             //Should not be null
             throw new MsControlException("MediaMixer Configuration cannot be null");
         //Get uid
-        String uid = "MM." + UUID.randomUUID().toString().replace("-", "");
+        String uid = "MediaMixers/" + UUID.randomUUID().toString().replace("-", "");
         //Check id
         if (params!=null && params.containsKey(MEDIAOBJECT_ID))
             //Set it
@@ -212,7 +212,7 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
     @Override
     public MediaMixer createMediaMixer(MediaConfig config, Parameters params) throws MsControlException {
         //Get uid
-        String uid = "MM." + UUID.randomUUID().toString().replace("-", "");
+        String uid = "MediaMixers/" + UUID.randomUUID().toString().replace("-", "");
         //Check id
         if (params!=null && params.containsKey(MEDIAOBJECT_ID))
             //Set it

@@ -5,13 +5,14 @@
 
 package org.murillo.mscontrol.networkconnection;
 
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -27,9 +28,26 @@ import javax.media.mscontrol.networkconnection.SdpException;
 import javax.media.mscontrol.networkconnection.SdpPortManager;
 import javax.media.mscontrol.networkconnection.SdpPortManagerEvent;
 import javax.media.mscontrol.networkconnection.SdpPortManagerException;
+import org.apache.xmlrpc.XmlRpcException;
 import org.murillo.MediaServer.Codecs;
 import org.murillo.MediaServer.Codecs.MediaType;
+import org.murillo.MediaServer.Codecs.Setup;
+import org.murillo.abnf.ParserException;
 import org.murillo.mscontrol.MediaSessionImpl;
+import org.murillo.mscontrol.ParametersImpl;
+import org.murillo.mscontrol.ext.codecs;
+import org.murillo.mscontrol.util.H264ProfileLevelID;
+import org.murillo.sdp.Attribute;
+import org.murillo.sdp.Bandwidth;
+import org.murillo.sdp.Connection;
+import org.murillo.sdp.CryptoAttribute;
+import org.murillo.sdp.ExtMapAttribute;
+import org.murillo.sdp.FingerprintAttribute;
+import org.murillo.sdp.FormatAttribute;
+import org.murillo.sdp.MediaDescription;
+import org.murillo.sdp.RTPMapAttribute;
+import org.murillo.sdp.SSRCAttribute;
+import org.murillo.sdp.SessionDescription;
 
 /**
  *
@@ -57,34 +75,113 @@ public final class SdpPortManagerImpl implements SdpPortManager{
     private Boolean audioSupported;
     private Boolean videoSupported;
     private Boolean textSupported;
-    private String h264profileLevelId;
-    private int h264packetization;
-    private String  localSDP;
-    private String  remoteSDP;
 
     private HashMap<String,List<Integer>> supportedCodecs = null;
     private HashSet<Integer> requiredCodecs = null;
     private HashMap<String,HashMap<Integer,Integer>> rtpInMediaMap = null;
     private HashMap<String,HashMap<Integer,Integer>> rtpOutMediaMap = null;
-    private String rejectedMedias;
-    private CodecPolicy codecPolicy;
+    private HashMap<String,HashMap<String,Integer>> supportedExtensions = null;
+    private HashMap<String,HashMap<String,Integer>> rtpExtensionMap = null;
+    private ArrayList<MediaDescription> rejectedMedias;
     private String videoContentType;
+    private H264ProfileLevelID h264profileLevelId;
+    private Integer h264packetization;
+    private final String h264profileLevelIdDefault = "42801F";
+    private Integer videoBitrate;
+    private SessionDescription remoteSDP;
+    private SessionDescription localSDP;
+    private Boolean isSecure;
+    private Boolean useDTLS;
+    private Boolean rtcpFeedBack;
+    private HashMap<String,CryptoInfo> localCryptoInfo;
+    private HashMap<String,CryptoInfo> remoteCryptoInfo;
+    private HashMap<String,DTLSInfo> remoteDTLSInfo;
+    private Boolean useICE;
+    private HashMap<String,ICEInfo> localICEInfo;
+    private HashMap<String,ICEInfo> remoteICEInfo;
+    private HashMap<String,HashMap<String,String>> rtpMediaProperties;
+    private HashMap<String,Codecs.Direction> rtpDirections;
+    private HashMap<String,Setup> rtpSetups;
+    private String localFingerprint;
+    private String localHash = "SHA-256";
+    
+    private CodecPolicy codecPolicy;
+    private final ParametersImpl params;
+
+    private static final Logger logger = Logger.getLogger(SdpPortManagerImpl.class.getName());
     
     public SdpPortManagerImpl(NetworkConnectionImpl conn,Parameters params) {
         //Store connection
         this.conn = conn;
+	//Store params
+	this.params = (ParametersImpl) params;
         //No sending ports
-        this.sendAudioPort = 0;
-        this.sendVideoPort = 0;
-        this.sendTextPort = 0;
+        sendAudioPort = 0;
+        sendVideoPort = 0;
+        sendTextPort = 0;
+        //No receiving ports
+        recAudioPort = 0;
+        recVideoPort = 0;
+        recTextPort = 0;
         //Supported media
-        this.audioSupported = true;
-        this.videoSupported = true;
-        this.textSupported = true;
-        //No codecs
-        audioCodec = -1;
-        videoCodec = -1;
-        textCodec = -1;
+        audioSupported = true;
+        videoSupported = true;
+        textSupported = true;
+        //Create supported codec map
+        supportedCodecs = new HashMap<String, List<Integer>>();
+        //Create media maps
+        rtpInMediaMap = new HashMap<String,HashMap<Integer,Integer>>();
+        rtpOutMediaMap = new HashMap<String,HashMap<Integer,Integer>>();
+        //No rejected medias and no video content type
+        rejectedMedias = new ArrayList<MediaDescription>();
+        videoContentType = "";
+        //Set default level and packetization
+        h264profileLevelId = null;
+        h264packetization = 0;
+        //Not secure by default
+        isSecure = false;
+        //Not using ice by default
+        useICE = false;
+	//Do not use DTLS by default
+	useDTLS = false;
+	//Create crypto info maps
+        localCryptoInfo = new HashMap<String, CryptoInfo>();
+        remoteCryptoInfo = new HashMap<String, CryptoInfo>();
+	remoteDTLSInfo = new HashMap<String, DTLSInfo>();
+         //Create ICE info maps
+        localICEInfo = new HashMap<String, ICEInfo>();
+        remoteICEInfo = new HashMap<String, ICEInfo>();
+        //RTP media properties
+        rtpMediaProperties = new HashMap<String, HashMap<String, String>>(3);
+        //Add default properties
+        rtpMediaProperties.put("audio",new HashMap<String,String>());
+        rtpMediaProperties.put("video",new HashMap<String,String>());
+        rtpMediaProperties.put("text",new HashMap<String,String>());
+	//RTP directions
+        rtpDirections = new HashMap<String,Codecs.Direction>(3);
+	//Ser default directions
+	rtpDirections.put("audio",Codecs.Direction.SENDRECV);
+	rtpDirections.put("video",Codecs.Direction.SENDRECV);
+	rtpDirections.put("text" ,Codecs.Direction.SENDRECV);
+	//RTP setup
+	rtpSetups = new HashMap<String,Setup>(3);
+	//Actpass by default
+	rtpSetups.put("audio",Setup.ACTPASS);
+	rtpSetups.put("video",Setup.ACTPASS);
+	rtpSetups.put("text" ,Setup.ACTPASS);
+	//Map of extensions
+	supportedExtensions = new HashMap<String, HashMap<String, Integer>>();
+	//Create extensions for each media
+	supportedExtensions.put("audio", new HashMap<String,Integer>());
+	supportedExtensions.put("video", new HashMap<String,Integer>());
+	//Add them
+	supportedExtensions.get("audio").put("urn:ietf:params:rtp-hdrext:ssrc-audio-level",1);
+	supportedExtensions.get("video").put("urn:ietf:params:rtp-hdrext:toffset",2);
+	supportedExtensions.get("video").put("http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time",3);
+	//Create extension map
+	rtpExtensionMap = new HashMap<String, HashMap<String, Integer>>();
+        //Has RTCP feedback
+        rtcpFeedBack = false;
         //Create supported codec map
         supportedCodecs = new HashMap<String, List<Integer>>();
         //Create required set
@@ -100,19 +197,17 @@ public final class SdpPortManagerImpl implements SdpPortManager{
         addSupportedCodec("audio", Codecs.GSM);
         addSupportedCodec("audio", Codecs.AMR);
         addSupportedCodec("audio", Codecs.TELEFONE_EVENT);
+	addSupportedCodec("audio", Codecs.SPEEX16);
+	addSupportedCodec("audio", Codecs.OPUS);
         //Enable all video codecs
         addSupportedCodec("video", Codecs.H264);
         addSupportedCodec("video", Codecs.H263_1998);
         addSupportedCodec("video", Codecs.H263_1996);
+	addSupportedCodec("video", Codecs.VP8);
+	addSupportedCodec("video", Codecs.RED);
         //Enable all text codecs
         addSupportedCodec("text", Codecs.T140RED);
         addSupportedCodec("text", Codecs.T140);
-        //No rejected medias and no video content type
-        rejectedMedias = "";
-        videoContentType = "";
-        //Set default level and packetization
-        h264profileLevelId = "";
-        h264packetization = 0;
     }
 
     @Override
@@ -121,11 +216,9 @@ public final class SdpPortManagerImpl implements SdpPortManager{
             //Start receivint
             conn.startReceiving(this);
         } catch (MsControlException ex) {
-            Logger.getLogger(SdpPortManagerImpl.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
             throw new SdpPortManagerException("Could not start receiving", ex);
         }
-        //Set default profile
-        h264profileLevelId = "428015";
         //Create sdp
         localSDP = createSDP();
         //Generate success
@@ -134,14 +227,23 @@ public final class SdpPortManagerImpl implements SdpPortManager{
 
     @Override
     public void processSdpOffer(byte[] sdp) throws SdpPortManagerException {
-        //Store remote sdp
-        remoteSDP = new String(sdp);
-
         //Cacht any parsing error
         try {
+	     //Store remote sdp
+	    remoteSDP = SessionDescription.Parse(sdp);
             //Procces it
             processSDP(remoteSDP);
-        } catch (SdpPortManagerException e) {
+        } catch (ParserException pex) {
+	    //Send error
+            error(SdpPortManagerEvent.SDP_NOT_ACCEPTABLE, pex.getMessage());
+            //exit
+            throw new SdpException("SDP not acceptable: "+pex.getMessage(), pex);
+	} catch (IllegalArgumentException ex) {
+	    //Send error
+            error(SdpPortManagerEvent.SDP_NOT_ACCEPTABLE, ex.getMessage());
+            //exit
+            throw new SdpException("SDP not acceptable: "+ex.getMessage(), ex);
+	} catch (SdpPortManagerException e) {
             //Send error
             error(SdpPortManagerEvent.SDP_NOT_ACCEPTABLE, e.getMessage());
             //exit
@@ -152,11 +254,13 @@ public final class SdpPortManagerImpl implements SdpPortManager{
             conn.startReceiving(this);
             //Create sdp
             localSDP = createSDP();
-            //Generate success
+	    //Generate success
             success(SdpPortManagerEvent.ANSWER_GENERATED);
+	    //SDP negotiation done
+	    conn.onSDPNegotiationDone(this);
             //Start sending
             conn.startSending(this);
-        } catch (MsControlException ex) {
+        } catch (Exception ex) {
             //And thow
             throw new SdpPortManagerException("Could not start", ex);
         }
@@ -164,16 +268,24 @@ public final class SdpPortManagerImpl implements SdpPortManager{
 
     @Override
     public void processSdpAnswer(byte[] sdp) throws SdpPortManagerException {
-        
-        //Store remote sdp
-        remoteSDP = new String(sdp);
-        
         try {
+	    //Store remote sdp
+	    remoteSDP = SessionDescription.Parse(sdp);
             //Procces it
             processSDP(remoteSDP);
             //Generate success
             success(SdpPortManagerEvent.ANSWER_PROCESSED);
-        } catch (SdpPortManagerException e) {
+        } catch (IllegalArgumentException ex) {
+	    //Send error
+            error(SdpPortManagerEvent.SDP_NOT_ACCEPTABLE, ex.getMessage());
+            //exit
+            throw new SdpException("SDP not acceptable "+ex.getMessage(), ex);
+	} catch (ParserException ex) {
+	    //Send error
+            error(SdpPortManagerEvent.SDP_NOT_ACCEPTABLE, ex.getMessage());
+            //exit
+            throw new SdpException("SDP not acceptable "+ex.getMessage(), ex);
+	} catch (SdpPortManagerException e) {
             //Send error
             error(SdpPortManagerEvent.SDP_NOT_ACCEPTABLE, e.getMessage());
             //exit
@@ -181,12 +293,15 @@ public final class SdpPortManagerImpl implements SdpPortManager{
         }
         
         try {
+	    //SDP negotiation done
+	    conn.onSDPNegotiationDone(this);
             //Start sending
             conn.startSending(this);
-        } catch (MsControlException ex) {
-            Logger.getLogger(SdpPortManagerImpl.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (Exception ex) {
+            logger.log(Level.SEVERE, "processSdpAnswer error", ex);
             throw new SdpPortManagerException("Could not start sending", ex);
         }
+
     }
 
     @Override
@@ -196,12 +311,12 @@ public final class SdpPortManagerImpl implements SdpPortManager{
 
     @Override
     public byte[] getMediaServerSessionDescription() throws SdpPortManagerException {
-        return localSDP.getBytes();
+        return localSDP.toString().getBytes();
     }
 
     @Override
     public byte[] getUserAgentSessionDescription() throws SdpPortManagerException {
-        return remoteSDP.getBytes();
+        return remoteSDP.toString().getBytes();
     }
 
     @Override
@@ -616,29 +731,40 @@ public final class SdpPortManagerImpl implements SdpPortManager{
         return rtpOutMediaMap.get(media);
     }
 
-    public String createSDP() {
+    public SessionDescription createSDP() {
 
-        //Create the sdp string
-        String sdp = "v=0\r\n";
-        sdp += "o=- 0 0 IN IP4 " + getRecIp() +"\r\n";
-        sdp += "s=MediaMixerSession\r\n";
-        sdp += "c=IN IP4 "+ getRecIp() +"\r\n";
-        sdp += "t=0 0\r\n";
+        SessionDescription sdp = new SessionDescription();
 
+        //Set origin
+        sdp.setOrigin("-", Integer.toString(conn.getEndpointId()), Long.toString(new Date().getTime()), "IN", "IP4", getRecIp());
+        //Set name
+        sdp.setSessionName("MediaMixerSession");
+        //Set connection info
+        sdp.setConnection("IN", "IP4", getRecIp());
+        //Set time
+        sdp.addTime(0,0);
+        //Using ice?
+        if (useICE)
+                //Add ice lite attribute
+                sdp.addAttribute("ice-lite");
         //Check if supported
         if (audioSupported)
             //Add audio related lines to the sdp
-            sdp += addMediaToSdp("audio",recAudioPort,8000);
+            sdp.addMedia(createMediaDescription("audio",recAudioPort));
         //Check if supported
         if (videoSupported)
             //Add video related lines to the sdp
-            sdp += addMediaToSdp("video",recVideoPort,90000);
+            sdp.addMedia(createMediaDescription("video",recVideoPort));
         //Check if supported
         if (textSupported)
             //Add text related lines to the sdp
-            sdp += addMediaToSdp("text",recTextPort,1000);
-        //Add rejected medias
-        sdp += rejectedMedias;
+            sdp.addMedia(createMediaDescription("text",recTextPort));
+
+        //Add rejecteds medias
+        for (MediaDescription md : rejectedMedias)
+            //Add it
+            sdp.addMedia(md);
+
         //Return
         return sdp;
     }
@@ -683,8 +809,30 @@ public final class SdpPortManagerImpl implements SdpPortManager{
         return -1;
     }
 
-    private String addMediaToSdp(String mediaName, Integer port, int rate)
+    private MediaDescription createMediaDescription(String mediaName, Integer port)
     {
+        //Create AVP profile
+        String rtpProfile = "AVP";
+        //If is secure
+        if (isSecure)
+            //Prepend S
+            rtpProfile = "S"+rtpProfile;
+        //If has feedback
+        if (rtcpFeedBack)
+            //Append F
+            rtpProfile += "F";
+        //Create new meida description with default values
+        MediaDescription md = new MediaDescription(mediaName,port,"RTP/"+rtpProfile);
+
+        //Send and receive
+        md.addAttribute(rtpDirections.get(mediaName).reverse().valueOf());
+
+        //Enable rtcp muxing
+        md.addAttribute("rtcp-mux");
+
+        //Set media id
+        md.addAttribute("mid",mediaName);
+
         //Check if rtp map exist
         HashMap<Integer, Integer> rtpInMap = rtpInMediaMap.get(mediaName);
 
@@ -692,16 +840,80 @@ public final class SdpPortManagerImpl implements SdpPortManager{
         if (rtpInMap==null)
         {
             //Log
-            Logger.getLogger(SdpPortManager.class.getName()).log(Level.FINE, "addMediaToSdp rtpInMap is null. Disabling media ? ",mediaName);
+            logger.log(Level.FINE, "addMediaToSdp rtpInMap is null. Disabling media {0} ", new Object[]{mediaName});
+            //Disable media
+            md.setPort(0);
             //Return empty media
-            return "m=" +mediaName + " 0 RTP/AVP\r\n";
+            return md;
         }
 
-        //Create media string
-        String mediaLine = "m=" +mediaName + " " + port +" RTP/AVP";
+        //If we are using ice
+        if (useICE)
+        {
+            //Add host candidate for RTP
+            md.addCandidate("1", 1, "UDP", 33554432-1, getRecIp(), port, "host");
+	    //Check if not using rtcp mux
+	    if (!rtpMediaProperties.get(mediaName).containsKey("rtcp-mux"))
+                //Add host candidate for RTCP
+                md.addCandidate("1", 2, "UDP", 33554432-2, getRecIp(), port+1, "host");
+            //Get ICE info
+            ICEInfo info = localICEInfo.get(mediaName);
+            //If ge have it
+            if (info!=null)
+            {
+                //Set credentials
+                md.addAttribute("ice-ufrag",info.ufrag);
+                md.addAttribute("ice-pwd",info.pwd);
+            }
+        }
 
-        //The string for the formats
-        String formatLine = "";
+        //If we are secure
+	if (isSecure)
+	{
+	    //If we use dtls
+	    if (useDTLS)
+	    {
+		//Add fingerprint attribute
+		md.addAttribute(new FingerprintAttribute(localHash, localFingerprint));
+		//Get our setup
+		Setup setup = rtpSetups.get(mediaName);
+		//Add setup atttribute
+		md.addAttribute("setup",setup!=null?setup.valueOf():"passive");
+		//Add connection attribute
+		md.addAttribute("connection","new");
+	    } else {
+		//Get Crypto info for local media
+		CryptoInfo info = localCryptoInfo.get(mediaName);
+
+		//f we have crytpo info
+		if (info!=null)
+		    //Append attribute
+		    md.addAttribute(new CryptoAttribute(1, info.suite, "inline", info.key));
+	    }
+	}
+
+        //Only for webrtc participants
+        if (rtcpFeedBack)
+        {
+            //Create ramdon ssrc
+            Long ssrc = Math.round(Math.random()*Integer.MAX_VALUE);
+            //Set cname
+            String cname = conn.getEndpointId()+"@"+conn.getEndpointId();
+            //Label
+            String label = conn.getEndpointId()+"@"+conn.getEndpointId();
+            //Set app id
+            String appId = mediaName.substring(0,1)+"0";
+            //Add ssrc info
+            md.addAttribute(new SSRCAttribute(ssrc, "cname"     ,cname));
+            md.addAttribute(new SSRCAttribute(ssrc, "mslabel"   ,label));
+            md.addAttribute(new SSRCAttribute(ssrc, "msid"      ,label+" " + appId));
+            md.addAttribute(new SSRCAttribute(ssrc, "label"     ,label+appId));
+            //Set attributes
+            rtpMediaProperties.get(mediaName).put("ssrc", ssrc.toString());
+            rtpMediaProperties.get(mediaName).put("cname", cname);
+            //Allow nack
+            rtpMediaProperties.get(mediaName).put("useNACK", "1");
+        }
 
         //Add rtmpmap for each codec in supported order
         for (Integer codec : supportedCodecs.get(mediaName))
@@ -712,135 +924,294 @@ public final class SdpPortManagerImpl implements SdpPortManager{
                 //Check codec
                 if (mapping.getValue()==codec)
                 {
-                    //Get type mapping
-                    Integer type = mapping.getKey();
-                    //Append type
-                    mediaLine += " " +type;
-                    //Append to sdp
-                    formatLine += "a=rtpmap:" + type + " "+ Codecs.getNameForCodec(mediaName, codec) + "/"+rate+"\r\n";
-                    //Add h264 ftmp
+                    //Get fmt mapping
+                    Integer fmt = mapping.getKey();
+                    //Append fmt
+                    md.addFormat(fmt);
+                    if (codec!=Codecs.OPUS)
+                        //Add rtmpmap
+                        md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec));
+                    else
+                        //Add rtmpmap
+                        md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec),"2");
+                    //Depending on the codec
                     if (codec==Codecs.H264)
                     {
+                        //Check if we are offering first
+                        if (h264profileLevelId == null)
+                            //Set default profile
+                            h264profileLevelId = new H264ProfileLevelID(h264profileLevelIdDefault);
+
                         //Check packetization mode
                         if (h264packetization>0)
                             //Add profile and packetization mode
-                            formatLine += "a=fmtp:" + type + " profile-level-id="+h264profileLevelId+";packetization-mode="+h264packetization+"\r\n";
+                            md.addFormatAttribute(fmt,"profile-level-id="+h264profileLevelId+";packetization-mode="+h264packetization);
                         else
                             //Add profile id
-                            formatLine += "a=fmtp:" + type + " profile-level-id="+h264profileLevelId+"\r\n";
+                            md.addFormatAttribute(fmt,"profile-level-id="+h264profileLevelId);
                     } else if (codec==Codecs.H263_1996) {
-                        //Add profile id
-                        formatLine += "a=fmtp:" + type + " CIF=1;QCIF=1\r\n";
-                    }  else if (codec == Codecs.T140RED) {
+                        //Add h263 supported sizes
+                        md.addFormatAttribute(fmt,"CIF=1;QCIF=1");
+                    } else if (codec==Codecs.OPUS) {
+                        //Create format
+                        FormatAttribute fmtp = new FormatAttribute(fmt);
+                        //P time
+                        if (params.hasParameter(codecs.opus.ptime))
+			    //Add param
+			    fmtp.addParameter("ptime", params.getIntParameter(codecs.opus.ptime,10));
+			//Max p time
+			if (params.hasParameter(codecs.opus.maxptime))
+			    //Add param
+			    fmtp.addParameter("maxptime", params.getIntParameter(codecs.opus.maxptime,10));
+			//Min p time
+			if (params.hasParameter(codecs.opus.minptime))
+			    //Add param
+			    fmtp.addParameter("minptime", params.getIntParameter(codecs.opus.minptime,10));
+			//In band fec
+			if (params.hasParameter(codecs.opus.useinbandfec))
+			    //Add param
+			    fmtp.addParameter("useinbandfec", params.getIntParameter(codecs.opus.useinbandfec,1));
+			//Discontious transmission
+			if (params.hasParameter(codecs.opus.usedtx))
+			    //Add param
+			    fmtp.addParameter("usedtx", params.getIntParameter(codecs.opus.usedtx,1));
+			//Stereo
+                        if (params.hasParameter(codecs.opus.stereo))
+                            //Add param
+                            fmtp.addParameter("stereo", params.getIntParameter(codecs.opus.stereo,1));
+                        //Check codec parameter in profile
+                        if (params.hasParameter(codecs.opus.maxaveragebitrate))
+                            //Add param
+                            fmtp.addParameter("maxaveragebitrate", params.getIntParameter(codecs.opus.maxaveragebitrate,32000));
+			//Check if anything is there
+			if (!fmtp.isEmpty())
+			    //Add opus params support
+			    md.addAttribute(fmtp);
+                    } else if (codec==Codecs.ULPFEC) {
+                        //Enable fec
+                        rtpMediaProperties.get(mediaName).put("useFEC", "1");
+                    } else if (codec == Codecs.T140RED) {
                         //Find t140 codec
                         Integer t140 = findTypeForCodec(rtpInMap,Codecs.T140);
                         //Check that we have founf it
                         if (t140>0)
-                            //Add redundancy type
-                            formatLine += "a=fmtp:" + type + " " + t140 + "/" + t140 + "/" + t140 +"\r\n";
+                            //Add redundancy fmt
+                            md.addFormatAttribute(fmt,t140 + "/" + t140 + "/" + t140);
+                    }
+
+                    //Add rtcp-fb fir/pli only for video codecs
+                    if (mediaName.equals("video") && codec!=Codecs.RED  && codec!=Codecs.ULPFEC)
+                    {
+                        //Add rtcp-fb nack support
+                        md.addAttribute("rtcp-fb", fmt+" nack");
+                        //Add fir
+                        md.addAttribute("rtcp-fb", fmt+" ccm fir");
+                        //Add Remb
+                        md.addAttribute("rtcp-fb", fmt+" goog-remb");
                     }
                 }
             }
         }
-        //End media line
-        mediaLine += "\r\n";
-
-        //If it is video and set the default bitrate
-        if (mediaName.equals("video"))
-                //Set to 784-64 for audio
-                mediaLine += "b=AS:720\r\n";
-
-        //If not format has been found
-        if (formatLine.isEmpty())
-        {
-            //Log
-            Logger.getLogger(SdpPortManager.class.getName()).log(Level.FINE, "addMediaToSdp no compatible codecs found for media {0} ", new Object[]{mediaName});
-            //Empty media line
-            return "m=" +mediaName + " 0 RTP/AVP\r\n";
-        }
 
         //If it is video and we have found the content attribute
         if (mediaName.equals("video") && !videoContentType.isEmpty())
-            mediaLine += "a=content:"+videoContentType+"\r\n";
+            //Add attribute
+            md.addAttribute("content",videoContentType);
 
-        //Return the media string
-        return mediaLine+formatLine;
+	//Get extensions for media
+	HashMap<String, Integer> extensions = rtpExtensionMap.get(mediaName);
+
+	//If we don't have yet an extension map, send the supported
+	if (extensions==null)
+	    //Get supported extensions
+	    extensions = supportedExtensions.get(mediaName);
+
+	//If we have extensions
+	if (extensions!=null)
+	    //For each one
+	    for (Entry<String,Integer> pair : extensions.entrySet())
+		//Add new extension attribute
+		md.addAttribute(new ExtMapAttribute(pair.getValue(), pair.getKey()));
+
+        //If not format has been found
+        if (md.getFormats().isEmpty())
+        {
+            //Log
+            logger.log(Level.FINE, "addMediaToSdp no compatible codecs found for media {0} ", new Object[]{mediaName});
+            //Disable
+            md.setPort(0);
+        }
+        //Return the media descriptor
+        return md;
     }
 
-    public void processSDP(String content) throws SdpPortManagerException {
+    public void processSDP(SessionDescription sdp) throws SdpPortManagerException {
         //Check required
-        HashSet<Integer> required = (HashSet<Integer>) requiredCodecs.clone();
-        //Search for the ip
-        int i = content.indexOf("\r\nc=IN IP4 ");
-        int j = content.indexOf("\r\n", i+1);
-        //Get the ip
-        String ip = content.substring(i + 11, j);
+        HashSet<Integer> required = (HashSet<Integer>)requiredCodecs.clone();
 
-        //Check if ip should be nat for this media mixer
-        if (conn.getMediaServer().isNated(ip))
-            //Do natting
-            ip = "0.0.0.0";
+        //Connnection IP
+        String ip = null;
+        //ICE credentials
+        String remoteICEFrag = null;
+        String remtoeICEPwd = null;
+
+        //Get the connection field
+        Connection connection = sdp.getConnection();
+
+        if (connection!=null)
+        {
+            //Get IP addr
+            ip = connection.getAddress();
+
+            //Check if ip should be nat for this media mixer
+            if (conn.getMediaServer().isNated(ip))
+                //Do natting
+                ip = "0.0.0.0";
+        }
 
         //Disable supported media
         audioSupported = false;
         videoSupported = false;
         textSupported = false;
 
-        //Search the next media
-        int m = content.indexOf("\r\nm=", j);
+        //NO bitrate by default
+        videoBitrate = 0;
+
+        //For each bandwith
+        for (Bandwidth band : sdp.getBandwidths())
+        {
+            //Get bitrate value
+            int rate = Integer.parseInt(band.getBandwidth());
+            //Check bandwith type
+            if (band.getType().equalsIgnoreCase("TIAS"))
+                    //Convert to kbps
+                    rate = rate/1000;
+            // Let some room for audio.
+            if (rate>=128)
+                //Remove maximum rate
+                rate -= 64;
+            //Check if is less
+            if (videoBitrate==0 || rate<videoBitrate)
+                //Set it
+                videoBitrate = rate;
+        }
+
+        //Check for global ice credentials
+        Attribute ufragAtrr = sdp.getAttribute("ice-ufrag");
+        Attribute pwdAttr = sdp.getAttribute("ice-pwd");
+
+        //Check if both present
+        if (ufragAtrr!=null && pwdAttr!=null)
+        {
+            //Using ice
+            useICE = true;
+            //Get values
+            remoteICEFrag = ufragAtrr.getValue();
+            remtoeICEPwd = pwdAttr.getValue();
+        }
+
+	//No DTLS fingerprint yet
+	String remoteHash = null;
+	String remoteFingerprint = null;
+
+	//Check global fingerprint attribute
+	FingerprintAttribute fingerprintAttr = (FingerprintAttribute) sdp.getAttribute("fingerprint");
+
+	//Check if there is one preset
+	if (fingerprintAttr!=null)
+	{
+	    //Using DTLS
+	    useDTLS = true;
+	    //Get remote fingerprint
+	    remoteHash	      = fingerprintAttr.getHashFunc();
+	    remoteFingerprint = fingerprintAttr.getFingerprint();
+	}
         
-        //Search medias
-        while (m > 0) {
-            //Search the first blanck
-            i = m + 4;
-            j = content.indexOf(" ", i);
+        for (MediaDescription md : sdp.getMedias())
+        {
+            //No default bitrate
+            int mediaBitrate = 0;
+
             //Get media type
-            String media = content.substring(i, j);
-            //Store ini of media
-            int ini = m;
-            //Search the next media
-            m = content.indexOf("\r\nm=", j);
+            String media = md.getMedia();
 
-            //Search port
-            i = j + 1;
-            j = content.indexOf(" ", i);
             //Get port
-            String port = content.substring(i, j);
-
-            //Search transport
-            i = j + 1;
-            j = content.indexOf(" ", i);
+            Integer port = md.getPort();
             //Get transport
-            String transport = content.substring(i,j);
+            ArrayList<String> proto = md.getProto();
 
-            //Search format list
-            i = j + 1;
-            j = content.indexOf("\r\n", i);
-            //Get it
-            String fmtString = content.substring(i, j);
+            //If it its not RTP
+            if (!proto.get(0).equals("RTP"))
+            {
+                //Create media descriptor
+                MediaDescription rejected = new MediaDescription(media,0,md.getProtoString());
+                //set all  formats
+                rejected.setFormats(md.getFormats());
+                //add to rejected media
+                rejectedMedias.add(rejected);
+                //Not supported media type
+                continue;
+            }
 
-            //Get fmts
-            StringTokenizer fmts  = new StringTokenizer(fmtString);
+            //Get bandwiths
+            for (Bandwidth band : md.getBandwidths())
+            {
+                //Get bitrate value
+                int rate = Integer.parseInt(band.getBandwidth());
+                //Check bandwith type
+                 if (band.getType().equalsIgnoreCase("TIAS"))
+                    //Convert to kbps
+                    rate = rate/1000;
+                //Check if less than current
+                if (mediaBitrate==0 || rate<mediaBitrate)
+                    //Set it
+                    mediaBitrate = rate;
+            }
+
+            //Check if it supports rtcp-muxing
+            if (md.hasAttribute("rtcp-mux"))
+                //Add attribute
+                rtpMediaProperties.get(media).put("rtcp-mux", "1");
+
+	    //Check direction attributes
+	    if (md.hasAttribute("sendonly"))
+	    {
+		//Part is sendonly
+		rtpDirections.put(media, Codecs.Direction.SENDONLY);
+	    } else if (md.hasAttribute("recvonly")) {
+		//Part is recvonly
+		rtpDirections.put(media, Codecs.Direction.RECVONLY);
+	    } else if (md.hasAttribute("inactive")) {
+		//Part is inactive
+		rtpDirections.put(media, Codecs.Direction.INACTIVE);
+	    } else {
+		//Part is sendrecv
+		rtpDirections.put(media, Codecs.Direction.SENDRECV);
+	    }
 
             //Add support for the media
             if (media.equals("audio")) {
                 //Set as supported
                 audioSupported = true;
             } else if (media.equals("video")) {
-                //Check for content attribute inside the media
-                i = content.indexOf("\r\na=content:", j);
+                //Get content attribute
+                Attribute content = md.getAttribute("content");
                 //Check if we found it inside this media
-                if (i>0 && (i<m || m<0))
+                if (content!=null)
                 {
-                    //Get end
-                    int k = content.indexOf("\r\n", i+1);
                     //Get it
-                    String mediaContentType = content.substring(i+12, k);
+                    String mediaContentType = content.getValue();
                     //Check if it is not main
                     if (!mediaContentType.equalsIgnoreCase("main"))
                     {
-                        //Add video content to the rejected media list
-                        rejectedMedias += "m="+media+" 0 "+transport+" "+fmtString+"\r\na=content:"+mediaContentType+"\r\n";
+                        //Create media descriptor
+                        MediaDescription rejected = new MediaDescription(media,0,md.getProtoString());
+                        //set all  formats
+                        rejected.setFormats(md.getFormats());
+                        //Add content attribute
+                        rejected.addAttribute(content);
+                        //add to rejected media
+                        rejectedMedias.add(rejected);
                         //Skip it
                         continue;
                     } else {
@@ -848,14 +1219,22 @@ public final class SdpPortManagerImpl implements SdpPortManager{
                         videoContentType = mediaContentType;
                     }
                 }
+                //Check if we have a media rate less than the current bitrate
+                if (videoBitrate==0 || (mediaBitrate>0 && mediaBitrate<videoBitrate))
+                    //Store bitrate
+                    videoBitrate = mediaBitrate;
                 //Set as supported
                 videoSupported = true;
             } else if (media.equals("text")) {
                 //Set as supported
                 textSupported = true;
             } else {
-                //Add it to the rejected media lines
-                rejectedMedias += "m="+media+" 0 "+transport+" "+fmtString+"\r\n";
+                //Create media descriptor
+                MediaDescription rejected = new MediaDescription(media,0,md.getProtoString());
+                //set all  formats
+                rejected.setFormats(md.getFormats());
+                //add to rejected media
+                rejectedMedias.add(rejected);
                 //Not supported media type
                 continue;
             }
@@ -866,104 +1245,163 @@ public final class SdpPortManagerImpl implements SdpPortManager{
                 rtpOutMediaMap.put(media, new HashMap<Integer, Integer>());
 
             //Get all codecs
-            while (fmts.hasMoreTokens()) {
-                try {
-                    //Get codec
-                    Integer codec = Integer.parseInt(fmts.nextToken());
-                    //If it is static
-                    if (codec<96)
-                        //Put it in the map
-                        rtpOutMediaMap.get(media).put(codec,codec);
-                } catch (Exception e) {
-                    //Ignore non integer codecs, like '*' on application
-                }
-            }
-
             //No codec priority yet
             Integer priority = Integer.MAX_VALUE;
 
             //By default the media IP is the general IO
             String mediaIp = ip;
 
-            //Search for the ip inside the media
-            i = content.indexOf("\r\nc=IN IP4 ", j);
-
-            //Check if we found it inside this media
-            if (i>0 && (i<m || m<0))
+            //Get connection info
+            for (Connection c : md.getConnections())
             {
-                //Get end
-                int k = content.indexOf("\r\n", i+1);
                 //Get it
-                mediaIp = content.substring(i+11, k);
+                mediaIp = c.getAddress();
                 //Check if ip should be nat for this media mixer
                 if (conn.getMediaServer().isNated(mediaIp))
                     //Do natting
                     mediaIp = "0.0.0.0";
             }
 
-            //Search the first format in this media
-            int f = content.indexOf("a=rtpmap:", j);
+            //Get rtp profile
+            String rtpProfile = proto.get(1);
+	    //Check if it is DTLS
+	    if (rtpProfile.equals("TLS"))
+	    {
+		    //Using DTLS
+		    useDTLS = true;
+		    //Get profile
+		    rtpProfile = proto.get(2);
+	    }
+            //Check if it is secure
+            if (rtpProfile.startsWith("S"))
+            {
+                //Secure (WARNING: if one media is secure, all will be secured, FIX!!)
+                isSecure = true;
+
+		//Check media fingerprint attribute
+		fingerprintAttr = (FingerprintAttribute) md.getAttribute("fingerprint");
+
+		//Check if DTLS is available
+		if (fingerprintAttr!=null)
+		{
+		    //Using DTLS
+		    useDTLS = true;
+		    //Get remote fingerprint and hash
+		    remoteHash	      = fingerprintAttr.getHashFunc();
+		    remoteFingerprint = fingerprintAttr.getFingerprint();
+		}
+
+		//If we have fingerprint
+		if (useDTLS)
+		{
+		    //Set deault setup
+		    String setup = "actpass";
+		    //Get setup attribute
+		    Attribute attr = md.getAttribute("setup");
+		    //Chekc it
+		    if (attr!=null)
+			//Set it
+			setup = attr.getValue();
+		    //Create new DTLS info
+		    remoteDTLSInfo.put(media, new DTLSInfo(setup,remoteHash,remoteFingerprint));
+		    //Set ur setup as reverese of remote
+		    rtpSetups.put(media, Setup.byValue(setup).reverse());
+		} else {
+		    //Check crypto attribute
+		    CryptoAttribute crypto = (CryptoAttribute) md.getAttribute("crypto");
+
+		    //Check SDES key
+		    if (crypto!=null)
+		    {
+			//Get suite
+			String suite = crypto.getSuite();
+			//Get key
+			String key = crypto.getFirstKeyParam().getInfo();
+			//Add it
+			remoteCryptoInfo.put(media, new CryptoInfo(suite,key));
+		    }
+		}
+            }
+            //Check if has rtcp
+            if (rtpProfile.endsWith("F"))
+                //With feedback (WARNING: if one media has feedback, all will have feedback, FIX!!)
+                rtcpFeedBack = true;
 
             //FIX
             Integer h264type = 0;
-            String maxh264profile = "";
-            //Check there is one format and it's from this media
-            while (f > 0 && (m < 0 || f < m)) {
-                //Get the format
-                i = content.indexOf(" ", f + 10);
-                j = content.indexOf("/", i);
-                 //Get the codec type
-                Integer type = Integer.parseInt(content.substring(f+9,i));
-                //Get the media type
-                String codecName = content.substring(i+1, j);
-                //Get codec for name
-                Integer codec = Codecs.getCodecForName(media,codecName);
-                //Remove from required
-                required.remove(codec);
-                //if it is h264 TODO: FIIIIX!!!
-                if (codec==Codecs.H264)
+            H264ProfileLevelID maxh264profile = null;
+
+            //For each format
+            for (String fmt : md.getFormats())
+            {
+                Integer type = 0;
+                try {
+                    //Get codec
+                    type = Integer.parseInt(fmt);
+                } catch (Exception e) {
+                    //Ignore non integer codecs, like '*' on application
+                    continue;
+                }
+
+                //If it is dinamic
+                if (type>=96)
                 {
-                    //start of fmtp line
-                    String start = "a=fmtp:"+type;
-                    //Check if we have format for it
-                    int k = content.indexOf(start,ini);
-                    //If we have it
-                    if (k!=-1)
+                    //Get map
+                    RTPMapAttribute rtpMap = md.getRTPMap(type);
+                    //Check it has mapping
+                    if (rtpMap==null)
+                        //Skip this one
+                        continue;
+                    //Get the media type
+                    String codecName = rtpMap.getName();
+                    //Get codec for name
+                    Integer codec = Codecs.getCodecForName(media,codecName);
+		    //Remove from required
+		    required.remove(codec);
+		    //if it is h264
+                    if (codec==Codecs.H264)
                     {
+                        int k = -1;
                         //Get ftmp line
-                        String ftmpLine = content.substring(k,content.indexOf("\r\n",k));
-                        //Get profile id
+                        String ftmpLine = md.getFormatParameters(type);
+                        //Check if got format
+                        if (ftmpLine!=null)
+                            //Find profile
                         k = ftmpLine.indexOf("profile-level-id=");
                         //Check it
                         if (k!=-1)
                         {
-                            //Get profile
-                            String profile = ftmpLine.substring(k+17,k+23);
+                            //Get profile level indication
+                            H264ProfileLevelID profileLevelId = new H264ProfileLevelID(ftmpLine.substring(k+17,k+23));
                             //Convert and compare
-                            if (maxh264profile.isEmpty() || Integer.parseInt(profile,16)>Integer.parseInt(maxh264profile,16))
+                            if (profileLevelId.getProfile()<=Codecs.MaxH264SupportedProfile && (maxh264profile==null || profileLevelId.getProfile()>maxh264profile.getProfile()) )
                             {
                                 //Store this type provisionally
                                 h264type = type;
                                 //store new profile value
-                                maxh264profile = profile;
+                                maxh264profile = profileLevelId;
                                 //Check if it has packetization parameter
                                 if (ftmpLine.indexOf("packetization-mode=1")!=-1)
                                     //Set it
                                     h264packetization = 1;
+                                else
+                                    //Unset it
+                                    h264packetization = 0;
                             }
+                        } else {
+                            //check if no profile has been received so far
+                            if (maxh264profile==null)
+                                //Store this type provisionally
+                                h264type = type;
                         }
-                    } else {
-                        //check if no profile has been received so far
-                        if (maxh264profile.isEmpty())
-                            //Store this type provisionally
-                            h264type = type;
+                    } else if (codec!=-1) {
+                        //Set codec mapping
+                        rtpOutMediaMap.get(media).put(type,codec);
                     }
-                } else if (codec!=-1) {
-                    //Set codec mapping
-                     rtpOutMediaMap.get(media).put(type,codec);
+                } else {
+                    //Static, put it in the map
+                    rtpOutMediaMap.get(media).put(type,type);
                 }
-                //Get next
-                f = content.indexOf("a=rtpmap:", j);
             }
 
             //Check if we have type for h264
@@ -975,104 +1413,157 @@ public final class SdpPortManagerImpl implements SdpPortManager{
                 rtpOutMediaMap.get(media).put(h264type,Codecs.H264);
             }
 
+            //ICE credentials
+            String remoteMediaICEFrag = remoteICEFrag;
+            String remtoeMediaICEPwd = remtoeICEPwd;
+            //Check for global ice credentials
+            ufragAtrr = md.getAttribute("ice-ufrag");
+            pwdAttr = md.getAttribute("ice-pwd");
+
+            //Check if both present
+            if (ufragAtrr!=null && pwdAttr!=null)
+            {
+                //Using ice
+                useICE = true;
+                //Get values
+                remoteMediaICEFrag = ufragAtrr.getValue();
+                remtoeMediaICEPwd = pwdAttr.getValue();
+            }
+
             //Check required
             if (!required.isEmpty())
                 //Set error
                 throw new SdpPortManagerException("Required codecs not found");
             
-            //For each entry
+             //For each entry
             for (Integer codec : rtpOutMediaMap.get(media).values())
             {
-                    //Check the media type
-                    if (media.equals("audio"))
+                //Check the media type
+                if (media.equals("audio"))
+                {
+                    //Get suppoorted codec for media
+                    List<Integer> audioCodecs = supportedCodecs.get("audio");
+                    //Get index
+                    for (int index=0;index<audioCodecs.size();index++)
                     {
-                        //Get suppoorted codec for media
-                        List<Integer> audioCodecs = supportedCodecs.get("audio");
-                        //Get index
-                        for (int index=0;index<audioCodecs.size();index++)
+                        //Check codec
+                        if (audioCodecs.get(index)==codec)
                         {
-                            //Check codec
-                            if (audioCodecs.get(index)==codec)
+                            //Check if it is first codec for audio
+                            if (priority==Integer.MAX_VALUE)
                             {
-                                //Check if it is first codec for audio
-                                if (priority==Integer.MAX_VALUE)
-                                {
-                                    //Set port
-                                    setSendAudioPort(Integer.parseInt(port));
-                                    //And Ip
-                                    setSendAudioIp(mediaIp);
-                                }
-                                //Check if we have a lower priority
-                                if (index<priority)
-                                {
-                                    //Store priority
-                                    priority = index;
-                                    //Set codec
-                                    setAudioCodec(codec);
-                                }
+                                //Set port
+                                setSendAudioPort(port);
+                                //And Ip
+                                setSendAudioIp(mediaIp);
+                            }
+                            //Check if we have a lower priority
+                            if (index<priority)
+                            {
+                                //Store priority
+                                priority = index;
+                                //Set codec
+                                setAudioCodec(codec);
                             }
                         }
                     }
-                    else if (media.equals("video"))
+                }
+                else if (media.equals("video"))
+                {
+                    //Get suppoorted codec for media
+                    List<Integer> videoCodecs = supportedCodecs.get("video");
+                    //Get index
+                    for (int index=0;index<videoCodecs.size();index++)
                     {
-                        //Get suppoorted codec for media
-                        List<Integer> videoCodecs = supportedCodecs.get("video");
-                        //Get index
-                        for (int index=0;index<videoCodecs.size();index++)
+                        //Check codec
+                        if (videoCodecs.get(index)==codec && codec!=Codecs.RED && codec!=Codecs.ULPFEC)
                         {
-                            //Check codec
-                            if (videoCodecs.get(index)==codec)
+                            //Check if it is first codec for video
+                            if (priority==Integer.MAX_VALUE)
                             {
-                                //Check if it is first codec for audio
-                                if (priority==Integer.MAX_VALUE)
-                                {
-                                    //Set port
-                                    setSendVideoPort(Integer.parseInt(port));
-                                    //And Ip
-                                    setSendVideoIp(mediaIp);
-                                }
-                                //Check if we have a lower priority
-                                if (index<priority)
-                                {
-                                    //Store priority
-                                    priority = index;
-                                    //Set codec
-                                    setVideoCodec(codec);
-                                }
+                                //Set port
+                                setSendVideoPort(port);
+                                //And Ip
+                                setSendVideoIp(mediaIp);
+                            }
+                            //Check if we have a lower priority
+                            if (index<priority)
+                            {
+                                //Store priority
+                                priority = index;
+                                //Set codec
+                                setVideoCodec(codec);
                             }
                         }
                     }
-                    else if (media.equals("text"))
+                }
+                else if (media.equals("text"))
+                {
+                    //Get suppoorted codec for media
+                    List<Integer> textCodecs = supportedCodecs.get("text");
+                    //Get index
+                    for (int index=0;index<textCodecs.size();index++)
                     {
-                        //Get suppoorted codec for media
-                        List<Integer> textCodecs = supportedCodecs.get("text");
-                        //Get index
-                        for (int index=0;index<textCodecs.size();index++)
+                        //Check codec
+                        if (textCodecs.get(index)==codec)
                         {
-                            //Check codec
-                            if (textCodecs.get(index)==codec)
+                            //Check if it is first codec for audio
+                            if (priority==Integer.MAX_VALUE)
                             {
-                                //Check if it is first codec for audio
-                                if (priority==Integer.MAX_VALUE)
-                                {
-                                    //Set port
-                                    setSendTextPort(Integer.parseInt(port));
-                                    //And Ip
-                                    setSendTextIp(mediaIp);
-                                }
-                                //Check if we have a lower priority
-                                if (index<priority)
-                                {
-                                    //Store priority
-                                    priority = index;
-                                    //Set codec
-                                    setTextCodec(codec);
-                                }
+                                //Set port
+                                setSendTextPort(port);
+                                //And Ip
+                                setSendTextIp(mediaIp);
+                            }                            //Check if we have a lower priority
+                            if (index<priority)
+                            {
+                                //Store priority
+                                priority = index;
+                                //Set codec
+                                setTextCodec(codec);
                             }
                         }
                     }
                 }
             }
+            //Check ice credentials
+            if (remoteMediaICEFrag!=null && remtoeMediaICEPwd!=null)
+                    //Create info and add to remote ones
+                    remoteICEInfo.put(media, new ICEInfo(remoteMediaICEFrag,remtoeMediaICEPwd));
+	    //Get extmap atrributes
+	    ArrayList<Attribute> extmaps = md.getAttributes("extmap");
+	    //Get supported extensions
+	    HashMap<String, Integer> supported = supportedExtensions.get(media);
+	    //If some extensions are supported for this media
+	    if (supported!=null)
+	    {
+		boolean offer = false;
+		//If it has not been created yet
+		if (rtpExtensionMap.containsKey(media))
+		{
+		    //Set it
+		    rtpExtensionMap.put(media, new HashMap<String, Integer>());
+		    //The SDP is an offer
+		    offer = true;
+		}
+		//For each one
+		for (Attribute attr : extmaps)
+		{
+		    //Cast
+		    ExtMapAttribute extmap = (ExtMapAttribute) attr;
+		    //Check if it is supperted
+		    if (supported.containsKey(extmap.getName()))
+		    {
+			//If it is an offer
+			if (offer)
+			    //Add it also to the outgoing SDP extmap
+			    rtpExtensionMap.get(media).put(extmap.getName(), extmap.getId());
+			//Add to the
+			rtpMediaProperties.get(media).put(extmap.getName(), extmap.getId().toString());
+		    }
+		}
+	    }
+        }
         //Check we have at least one codec
         if (audioSupported && audioCodec==null)
             //Set error
@@ -1136,4 +1627,52 @@ public final class SdpPortManagerImpl implements SdpPortManager{
     public void setSendVideoIp(String sendVideoIp) {
         this.sendVideoIp = sendVideoIp;
     }
+   
+    boolean getUseDTLS() {
+	return useDTLS;
+    }
+
+    public String getLocalHash() {
+	return localHash;
+    }
+
+    public void setLocalFingerprint(String localFingerprint) {
+	this.localFingerprint = localFingerprint;
+    }
+
+    boolean getIsSecure() {
+	return isSecure;
+    }
+
+    boolean getUseIce() {
+	return useICE;
+    }
+
+    void setLocalCryptoInfo(String media, CryptoInfo info) {
+	//Add to local info
+	localCryptoInfo.put(media, info);
+    }
+
+    void setLocalIceInfo(String media, ICEInfo info) {
+	//Add to local info
+	localICEInfo.put(media, info);
+    }
+
+
+    CryptoInfo getRemoteCryptoInfo(String media) {
+	return remoteCryptoInfo.get(media);
+    }
+    
+    ICEInfo getRemoteICEInfo(String media) {
+	return remoteICEInfo.get(media);
+    }
+
+    DTLSInfo getRemoteDTLSInfo(String media) {
+	return remoteDTLSInfo.get(media);
+    }
+
+    HashMap<String, String> getRTPMediaProperties(String media) {
+	return rtpMediaProperties.get(media);
+    }
+
 }

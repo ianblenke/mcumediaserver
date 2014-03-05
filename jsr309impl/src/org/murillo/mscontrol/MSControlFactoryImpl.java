@@ -42,11 +42,14 @@ public class MSControlFactoryImpl implements MsControlFactory, MediaServerEventQ
     private final HashMap<URI,MediaSessionImpl> sessions;
     private Integer count;
     private int queueId;
+    private String uuid;
     private MediaServerEventQueue eventQueue;
     private final DriverImpl driver;
     private final ExecutorService threadPool;
 
-    public MSControlFactoryImpl(MediaServer mediaServer, ExecutorService threadPool, DriverImpl driver) throws MsControlException {
+    public MSControlFactoryImpl(String uuid,MediaServer mediaServer, ExecutorService threadPool, DriverImpl driver) throws MsControlException {
+	//Store uuid
+	this.uuid = uuid;
         //store it
         this.mediaServer = mediaServer;
         //Store driver
@@ -86,7 +89,7 @@ public class MSControlFactoryImpl implements MsControlFactory, MediaServerEventQ
             }
             try {
                 //Create uri
-                uri = new URI("mscontrol", this.toString(), "127.0.0.1", 9090, "/MediaSession.ms" + (count++), null, null);
+                uri = new URI("mscontrol", uuid, "/MediaSessions/" + (count++), null);
             } catch (URISyntaxException ex) {
                 Logger.getLogger(MSControlFactoryImpl.class.getName()).log(Level.SEVERE, null, ex);
             }

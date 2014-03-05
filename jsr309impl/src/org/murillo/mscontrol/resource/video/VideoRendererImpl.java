@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package org.murillo.mscrontrol.resource.video;
+package org.murillo.mscontrol.resource.video;
 
 import java.io.StringReader;
 import java.util.HashSet;

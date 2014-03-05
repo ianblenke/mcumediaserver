@@ -195,7 +195,7 @@ public class DriverImpl implements Driver {
 
         if (properties==null)
             //Return default
-            return new MSControlFactoryImpl(mediaServerDefault,threadPool,this);
+            return new MSControlFactoryImpl("default",mediaServerDefault,threadPool,this);
 
         //Check if we have the server parameters
         if (properties.containsKey("MediaServerURL")
@@ -214,7 +214,7 @@ public class DriverImpl implements Driver {
                 //Create client
                 MediaServer mediaServer = new MediaServer(serverName,url,mediaIp,publicIp);
                 //Return it
-                return new MSControlFactoryImpl(mediaServer,threadPool,this);
+                return new MSControlFactoryImpl(serverName,mediaServer,threadPool,this);
             } catch (MalformedURLException ex) {
                 //Log
                 Logger.getLogger(DriverImpl.class.getName()).log(Level.SEVERE, null, ex);
@@ -230,11 +230,11 @@ public class DriverImpl implements Driver {
             //Get media server
             MediaServer mediaServer = servers.get(uid);
             //Return it
-            return new MSControlFactoryImpl(mediaServer,threadPool,this);
+            return new MSControlFactoryImpl(uid,mediaServer,threadPool,this);
         }
         
         //Return default
-         return new MSControlFactoryImpl(mediaServerDefault,threadPool,this);
+        return new MSControlFactoryImpl("default",mediaServerDefault,threadPool,this);
     }
 
     @Override
