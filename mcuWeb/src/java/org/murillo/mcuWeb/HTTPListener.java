@@ -63,4 +63,13 @@ public class HTTPListener implements Conference.Listener {
 
     public void onParticipantDestroyed(String confId, Integer partId) {
     }
+
+    public void onParticipantMediaChanged(String confId, Integer partId, Participant part) {
+    }
+
+    public void onParticipantMediaMuted(String confId, Integer partId, Participant part, String media, boolean muted) {
+    }
+
+    public void onOwnerChanged(String confId, Integer partId, Object data, Participant owner) {
+    }
 }

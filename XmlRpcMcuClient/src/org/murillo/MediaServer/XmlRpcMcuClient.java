@@ -27,6 +27,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import org.murillo.MediaServer.Codecs.MediaType;
+import org.murillo.MediaServer.Codecs.Setup;
 
 /**
  *
@@ -74,17 +75,29 @@ public class XmlRpcMcuClient {
     public static final Integer SQCIF	= 20; // 128  x 96	AR:	1,333333333
     public static final Integer SCIF	= 21; // 256  x 192	AR:	1,333333333
     
-    public static final Integer MOSAIC1x1   = 0;
-    public static final Integer MOSAIC2x2   = 1;
-    public static final Integer MOSAIC3x3   = 2;
-    public static final Integer MOSAIC3p4   = 3;
-    public static final Integer MOSAIC1p7   = 4;
-    public static final Integer MOSAIC1p5   = 5;
-    public static final Integer MOSAIC1p1   = 6;
-    public static final Integer MOSAICPIP1  = 7;
-    public static final Integer MOSAICPIP3  = 8;
-    public static final Integer MOSAIC4x4   = 9;
-    public static final Integer MOSAIC1p4   = 10;
+    public static final Integer MOSAIC1x1      = 0;
+    public static final Integer MOSAIC2x2      = 1;
+    public static final Integer MOSAIC3x3      = 2;
+    public static final Integer MOSAIC3p4      = 3;
+    public static final Integer MOSAIC1p7      = 4;
+    public static final Integer MOSAIC1p5      = 5;
+    public static final Integer MOSAIC1p1      = 6;
+    public static final Integer MOSAICPIP1     = 7;
+    public static final Integer MOSAICPIP3     = 8;
+    public static final Integer MOSAIC4x4      = 9;
+    public static final Integer MOSAIC1p4A     = 10;
+    public static final Integer MOSAIC1p2A     = 11;
+    public static final Integer MOSAIC1p2x2A   = 12;
+    public static final Integer MOSAIC1p6A     = 13;
+    public static final Integer MOSAIC1p12     = 14;
+    public static final Integer MOSAIC1p16A    = 15;
+    public static final Integer MOSAIC4x5A     = 16;
+    public static final Integer MOSAIC5x5      = 17;
+    public static final Integer MOSAIC1p1A     = 18;
+    public static final Integer MOSAIC1p2      = 19;
+    public static final Integer MOSAIC1p2x6A   = 20;
+    public static final Integer MOSAIC1p1p2x4A = 21;
+    public static final Integer MOSAIC1p3A     = 22;
 
     public static final Integer DefaultMosaic = 0;
     public static final Integer DefaultSidebar = 0;
@@ -127,6 +140,30 @@ public class XmlRpcMcuClient {
                 return 16;
             case 10:
                 return 5;
+	    case 11:
+		return 3;
+	    case 12:
+		return 5;
+	    case 13:
+		return 7;
+	    case 14:
+		return 13;
+	    case 15:
+		return 17;
+	    case 16:
+		return 20;
+	    case 17:
+		return 25;
+	    case 18:
+		return 2;
+	    case 19:
+		return 3;
+	    case 20:
+		return 13;
+	    case 21:
+		return 10;
+	    case 22:
+		return 4;
         }
         
         return -1;
@@ -270,10 +307,10 @@ public class XmlRpcMcuClient {
         return ((Integer)returnVal[0])==1;
     }
 
-    public Integer CreateParticipant(Integer confId,String name,Integer type,Integer mosaicId,Integer sidebarId) throws XmlRpcException
+    public Integer CreateParticipant(Integer confId,String name,String token,Integer type,Integer mosaicId,Integer sidebarId) throws XmlRpcException
     {
          //Create request
-        Object[] request = new Object[]{confId,name,type,mosaicId,sidebarId};
+        Object[] request = new Object[]{confId,name,token,type,mosaicId,sidebarId};
         //Execute 
         HashMap response = (HashMap) client.execute("CreateParticipant", request);
         //Get result
@@ -412,10 +449,10 @@ public class XmlRpcMcuClient {
         return (String) returnVal[0];
     }
 
-    public boolean SetRemoteCryptoDTLS(Integer confId,Integer partId,MediaType media,String setup,String hash,String fingerprint) throws XmlRpcException
+    public boolean SetRemoteCryptoDTLS(Integer confId,Integer partId,MediaType media,Setup setup,String hash,String fingerprint) throws XmlRpcException
     {
         //Create request
-        Object[] request = new Object[]{confId,partId,media.valueOf(),setup,hash,fingerprint};
+        Object[] request = new Object[]{confId,partId,media.valueOf(),setup.valueOf(),hash,fingerprint};
         //Execute
         HashMap response = (HashMap) client.execute("SetRemoteCryptoDTLS", request);
         //Return
@@ -715,6 +752,16 @@ public class XmlRpcMcuClient {
         Object[] request = new Object[]{confId,partId,media.valueOf(),isMuted?1:0};
         //Execute
         HashMap response = (HashMap) client.execute("SetMute", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
+
+     public boolean SetChair(Integer confId,int partId) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,partId};
+        //Execute
+        HashMap response = (HashMap) client.execute("SetChair", request);
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }

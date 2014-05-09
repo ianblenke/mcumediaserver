@@ -23,6 +23,10 @@ import java.io.Serializable;
 import java.util.HashSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlType;
 import org.apache.xmlrpc.XmlRpcException;
 import org.murillo.MediaServer.Codecs.MediaType;
 import org.murillo.MediaServer.XmlRpcMcuClient;
@@ -31,27 +35,51 @@ import org.murillo.MediaServer.XmlRpcMcuClient;
  *
  * @author Sergio
  */
+@XmlType()
+@XmlAccessorType(XmlAccessType.NONE)
 public abstract class Participant  implements Serializable {
+    @XmlElement
     protected Integer id;
+    @XmlElement
     protected String sessionId;
+    @XmlElement
     protected Type type;
+    @XmlElement
     protected String name;
+    @XmlElement
     protected Profile profile;
+    @XmlElement
     protected Boolean audioMuted;
+    @XmlElement
     protected Boolean videoMuted;
+    @XmlElement
     protected Boolean textMuted;
+    @XmlElement
     protected Boolean audioSupported;
+    @XmlElement
     protected Boolean videoSupported;
+    @XmlElement
     protected Boolean textSupported;
+    @XmlElement
     protected State state;
+    @XmlElement
     protected Integer mosaicId;
+    @XmlElement
     protected Integer sidebarId;
+    @XmlElement
+    protected Object data;
+    @XmlElement
+    protected Boolean isOwner;
+
     protected HashSet<Listener> listeners = null;
     protected Conference conf = null;
     private boolean autoAccept;
+    private String token;
 
     public interface Listener{
-        public void onStateChanged(Participant part,State state);
+        public void onStateChanged(Participant part,State state,State prev);
+	public void onMediaChanged(Participant part);
+	public void onMediaMuted(Participant part,String media, boolean muted);
     };
 
     public enum State {CREATED,CONNECTING,WAITING_ACCEPT,CONNECTED,ERROR,TIMEOUT,BUSY,DECLINED,NOTFOUND,DISCONNECTED,DESTROYED}
@@ -80,12 +108,13 @@ public abstract class Participant  implements Serializable {
         //Default constructor for Xml Serialization
     }
 
-    Participant(Integer id,String name,Integer mosaicId,Integer sidebarId,Conference conf,Type type) {
+    Participant(Integer id,String name,String token,Integer mosaicId,Integer sidebarId,Conference conf,Type type) {
         //Save values
         this.id = id;
         this.conf = conf;
         this.type = type;
         this.name = name;
+	this.token = token;
         this.mosaicId = mosaicId;
         this.sidebarId = sidebarId;
         //Get initial profile
@@ -122,8 +151,20 @@ public abstract class Participant  implements Serializable {
         return id;
     }
 
+    public Object getData() {
+	return data;
+    }
+
+    public void setData(Object data) {
+	this.data = data;
+    }
+
     public String getName() {
         return name;
+    }
+
+    public String getToken() {
+	return token;
     }
 
     public boolean isAutoAccept() {
@@ -157,12 +198,30 @@ public abstract class Participant  implements Serializable {
 
     protected void setState(State state) {
         Logger.getLogger(Participant.class.getName()).log(Level.SEVERE, "Partipant {0} change state from {1} to {2}", new Object[]{getId(),this.state,state});
+	//Store prev state
+	State prev = this.state;
+	//Change it
+        this.state = state;
         //Call listeners
         for(Listener listener : listeners)
             //Call it
-            listener.onStateChanged(this,state);
-        //Change it
-        this.state = state;
+            listener.onStateChanged(this,state,prev);
+    }
+
+    protected void changedMedia() {
+	Logger.getLogger(Participant.class.getName()).log(Level.SEVERE, "Partipant {0} changed media", new Object[]{getId()});
+        //Call listeners
+        for(Listener listener : listeners)
+            //Call it
+            listener.onMediaChanged(this);
+    }
+
+    protected void mutedMedia(String media,boolean muted) {
+	Logger.getLogger(Participant.class.getName()).log(Level.FINE, "Partipant {0} muted {1} {2} {", new Object[]{getId(),media,muted});
+        //Call listeners
+        for(Listener listener : listeners)
+            //Call it
+            listener.onMediaMuted(this,media,muted);
     }
 
     public void setName(String name) {
@@ -218,6 +277,8 @@ public abstract class Participant  implements Serializable {
             client.SetMute(conf.getId(), id, MediaType.AUDIO, flag);
             //Set audio muted
             audioMuted = flag;
+	    //Launch event
+	    mutedMedia("audio", flag);
         } catch (XmlRpcException ex) {
             Logger.getLogger(Participant.class.getName()).log(Level.SEVERE, "Failed to mute participant.", ex);
             }
@@ -231,6 +292,8 @@ public abstract class Participant  implements Serializable {
             client.SetMute(conf.getId(), id, MediaType.VIDEO, flag);
         //Set it
             videoMuted = flag;
+	    //Launch event
+	    mutedMedia("video", flag);
         } catch (XmlRpcException ex) {
             Logger.getLogger(Participant.class.getName()).log(Level.SEVERE, "Failed to mute participant.", ex);
         }
@@ -244,6 +307,8 @@ public abstract class Participant  implements Serializable {
             client.SetMute(conf.getId(), id, MediaType.TEXT, flag);
             //Set it
             textMuted = flag;
+	    //Launch event
+	    mutedMedia("text", flag);
             } catch (XmlRpcException ex) {
             Logger.getLogger(Participant.class.getName()).log(Level.SEVERE, "Failed to mute participant.", ex);
             }

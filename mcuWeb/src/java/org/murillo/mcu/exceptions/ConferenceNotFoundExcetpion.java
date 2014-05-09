@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package org.murillo.mcuWeb.exceptions;
+package org.murillo.mcu.exceptions;
 
 /**
  *

@@ -36,6 +36,7 @@ public class XmlRpcEventManager {
     private Socket socket;
     private PrintWriter writer;
     private boolean canceled;
+    private boolean connected;
 
 
 
@@ -51,6 +52,8 @@ public class XmlRpcEventManager {
     {
         //Create controller for retreiving default config
         controller = new XmlRpcTimedClient();
+	//not connected yet
+	connected = false;
     }
 
     public void Connect(String endpoint,Listener listener) throws MalformedURLException
@@ -125,9 +128,13 @@ public class XmlRpcEventManager {
                                     //Check it
                                     if (code >= 200 && code < 300) {
                                         //We are connected
+					connected = true;
+					//Launch listener
                                         listener.onConnect();
                                     } else {
                                         //Not connected
+					connected = false;
+					//Launch listener
                                         listener.onError();
                                         //exit
                                         return;
@@ -143,7 +150,9 @@ public class XmlRpcEventManager {
                                     //Set the start of the chunk
                                     parsingChunkHeader = true;
                                     //We are connected
-                                    listener.onConnect();
+				    connected = true;
+				    //Launch listener
+				    listener.onConnect();
                                     //Exit loop
                                     break;
                                 } else {
@@ -219,7 +228,9 @@ public class XmlRpcEventManager {
         }
         //trye to close everything anyway
         Close();
-        //Check if we have been canceled
+	//We are not connected anymore
+	connected = false;
+	//Check if we have been canceled
         if (canceled)
             //We are disconnected
             listener.onDisconnect();
@@ -295,4 +306,9 @@ public class XmlRpcEventManager {
         writer = null;
         socket = null;
     }
+
+    public boolean isConnected() {
+	return connected;
+    }
+
 }

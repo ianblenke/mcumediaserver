@@ -19,74 +19,99 @@
 
 package org.murillo.mcuWeb;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.Serializable;
 import java.net.MalformedURLException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.TransformerException;
 import org.apache.xmlrpc.XmlRpcException;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.ServletContext;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipURI;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import org.murillo.MediaServer.Codecs;
 import org.murillo.MediaServer.XmlRpcBroadcasterClient;
 import org.murillo.MediaServer.XmlRpcMcuClient;
+import org.murillo.MediaServer.XmlRpcMcuClient.ConferenceInfo;
 import org.murillo.mcuWeb.Participant.State;
-import org.murillo.mcuWeb.exceptions.ConferenceNotFoundExcetpion;
-import org.murillo.mcuWeb.exceptions.ParticipantNotFoundException;
-import org.murillo.util.ThreadPool;
+import org.murillo.mcu.exceptions.BroadcastNotFoundExcetpion;
+import org.murillo.mcu.exceptions.ConferenceNotFoundExcetpion;
+import org.murillo.mcu.exceptions.ParticipantNotFoundException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 /**
  * @author Sergio Garcia Murillo
  */
-public class ConferenceMngr implements Conference.Listener {
+public class ConferenceMngr implements Serializable,Conference.Listener,MediaMixer.Listener {
 
     public interface Listener {
         void onConferenceCreated(Conference conf);
         void onConferenceDestroyed(String confId);
     };
 
-    private final HashMap<String,MediaMixer> mixers;
-    private final HashMap<String,Conference> conferences;
-    private final HashMap<String,Broadcast> broadcasts;
-    private final HashMap<String,Profile> profiles;
-    private final HashMap<String,ConferenceTemplate> templates;
+    private final ConcurrentHashMap<String,MediaMixer> mixers;
+    private final ConcurrentHashMap<String,Conference> conferences;
+    private final ConcurrentHashMap<String,Broadcast> broadcasts;
+    private final ConcurrentHashMap<String,Profile> profiles;
+    private final ConcurrentHashMap<String,ConferenceTemplate> templates;
     private String confDir;
     private final HashSet<Listener> listeners;
     private SipFactory sf;
     
     public ConferenceMngr(ServletContext context) {
-
-
         //Store conf directory
-        confDir = "";
+        confDir = "/etc/medooze/mcu/";
+	//check if directory exist
+	File f = new File(confDir);
+	//Check it
+	if(!f.exists() || !f.isDirectory())
+	{
+	    //Error
+	    Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, "Directory {0} does not exists, using CWD as configuration directory", confDir);
+	    //Run from home dir
+            confDir = "";
+	}
         //Create empty maps
-        mixers = new HashMap<String,MediaMixer>();
-        profiles = new HashMap<String,Profile>();
-        templates = new HashMap<String,ConferenceTemplate>();
-        conferences = new HashMap<String,Conference>();
-        broadcasts = new HashMap<String,Broadcast>();
+        mixers = new ConcurrentHashMap<String,MediaMixer>();
+        profiles = new ConcurrentHashMap<String,Profile>();
+        templates = new ConcurrentHashMap<String,ConferenceTemplate>();
+        conferences = new ConcurrentHashMap<String,Conference>();
+        broadcasts = new ConcurrentHashMap<String,Broadcast>();
         listeners = new HashSet<Listener>();
+    }
 
+    public void setSipFactory(SipFactory sf) {
+        //Store it
+        this.sf = sf;
+        //Load configuration now
+        loadConfiguration();
+    }
+
+    public void loadConfiguration() {
         //Load configurations
         try {
             //Create document builder
@@ -101,6 +126,7 @@ public class ConferenceMngr implements Conference.Listener {
                 //Proccess each mixer
                 for (int i = 0; i < nodes.getLength(); i++)
                 {
+                    String id;
                         //Get element attributes
                         NamedNodeMap attrs = nodes.item(i).getAttributes();
                     //Get names
@@ -109,13 +135,23 @@ public class ConferenceMngr implements Conference.Listener {
                     String ip           = attrs.getNamedItem("ip").getNodeValue();
                     String publicIp     = attrs.getNamedItem("publicIp").getNodeValue();
                     String localNet     = "";
+                    //If no ID is found
+                    if (attrs.getNamedItem("id")!= null)
+                        //Get it
+                        id              = attrs.getNamedItem("id").getNodeValue();
+                    else
+                        //Legacy id
+                        id              = name+"@"+url;
+
                     //Check it
                     if (attrs.getNamedItem("localNet") !=null)
                         //Get local net value
                         localNet = attrs.getNamedItem("localNet").getNodeValue();
                     try {
                         //Create mixer
-                        MediaMixer mixer = new MediaMixer(name, url, ip, publicIp, localNet);
+                        MediaMixer mixer = new MediaMixer(id, name, url, ip, publicIp, localNet);
+                        //Listen for media mixer events
+                        mixer.setListener(this);
                         //Append mixer
                         mixers.put(mixer.getUID(),mixer);
                     } catch (MalformedURLException ex) {
@@ -143,12 +179,30 @@ public class ConferenceMngr implements Conference.Listener {
                         Integer.parseInt(attrs.getNamedItem("videoSize").getNodeValue()),
                         Integer.parseInt(attrs.getNamedItem("videoBitrate").getNodeValue()),
                         Integer.parseInt(attrs.getNamedItem("videoFPS").getNodeValue()),
-                        Integer.parseInt(attrs.getNamedItem("intraPeriod").getNodeValue()));
+                        Integer.parseInt(attrs.getNamedItem("intraPeriod").getNodeValue()),
+                        attrs.getNamedItem("maxVideoBitrate")!=null ? Integer.parseInt(attrs.getNamedItem("maxVideoBitrate").getNodeValue()) : 0,
+                        attrs.getNamedItem("audioRate")!=null ? Integer.parseInt(attrs.getNamedItem("audioRate").getNodeValue()) : 8000
+                        );
+                    //Get all properties nodes
+                    NodeList properties = nodes.item(i).getChildNodes();
+                    //For each property
+                    for (int j = 0; j < properties.getLength(); j++)
+                    {
+                        //Check node type
+                        if (properties.item(j).getNodeType()==Node.ELEMENT_NODE)
+                        {
+                            //Get key and value
+                            String key = properties.item(j).getAttributes().getNamedItem("key").getNodeValue();
+                            String val = properties.item(j).getTextContent();
+                            //Add it
+                            profile.addProperty(key, val);
+                        }
+                    }
                     //Append mixer
                     profiles.put(profile.getUID(),profile);
                 }
             } catch (Exception ex) {
-                Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, "Could not open profiles xml file {0}", ex.getMessage());
             }
 
             //Load templates configuration
@@ -188,10 +242,26 @@ public class ConferenceMngr implements Conference.Listener {
                         Integer.parseInt(attrs.getNamedItem("compType").getNodeValue()),
                         vad,
                         profiles.get(profileUID),
+                        attrs.getNamedItem("autoAccept")!=null?Boolean.parseBoolean(attrs.getNamedItem("autoAccept").getNodeValue()):false,
                         attrs.getNamedItem("audioCodecs").getNodeValue(),
                         attrs.getNamedItem("videoCodecs").getNodeValue(),
                         attrs.getNamedItem("textCodecs").getNodeValue()
                     );
+                    //Get all properties nodes
+                    NodeList properties = nodes.item(i).getChildNodes();
+                    //For each property
+                    for (int j = 0; j < properties.getLength(); j++)
+                    {
+                        //Check node type
+                        if (properties.item(j).getNodeType()==Node.ELEMENT_NODE)
+                        {
+                            //Get key and value
+                            String key = properties.item(j).getAttributes().getNamedItem("key").getNodeValue();
+                            String val = properties.item(j).getTextContent();
+                            //Add it
+                            template.addProperty(key, val);
+                        }
+                    }
                     //Append mixer
                     templates.put(template.getUID(),template);
                 }
@@ -204,11 +274,6 @@ public class ConferenceMngr implements Conference.Listener {
         } catch (ParserConfigurationException ex) {
                 Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
         }
-    }
-
-    public void setSipFactory(SipFactory sf) {
-        //Store it
-        this.sf = sf;
     }
 
     public void saveMixersConfiguration() {
@@ -228,6 +293,7 @@ public class ConferenceMngr implements Conference.Listener {
                 //create child element
                 Element child = doc.createElement("mixer");
                 //Set attributes
+                child.setAttribute("id", mixer.getName());
                 child.setAttribute("name", mixer.getName());
                 child.setAttribute("url", mixer.getUrl());
                 child.setAttribute("ip", mixer.getIp());
@@ -265,18 +331,31 @@ public class ConferenceMngr implements Conference.Listener {
                 //create child element
                 Element child = doc.createElement("template");
                 //Set attributes
-                child.setAttribute("name"       ,template.getName());
-                child.setAttribute("did"        ,template.getDID());
-                child.setAttribute("size"       ,template.getSize().toString());
-                child.setAttribute("compType"   ,template.getCompType().toString());
+                child.setAttribute("name"           ,template.getName());
+                child.setAttribute("did"            ,template.getDID());
+                child.setAttribute("size"           ,template.getSize().toString());
+                child.setAttribute("compType"       ,template.getCompType().toString());
                 child.setAttribute("vad"            ,template.getVADMode().toString());
-                child.setAttribute("mixer"      ,template.getMixer().getUID());
-                child.setAttribute("profile"    ,template.getProfile().getUID());
+                child.setAttribute("mixer"          ,template.getMixer().getUID());
+                child.setAttribute("profile"        ,template.getProfile().getUID());
+                child.setAttribute("autoAccept"     ,template.isAutoAccept().toString());
                 //Set codecs
-                child.setAttribute("audioCodecs"  ,template.getAudioCodecs());
-                child.setAttribute("videoCodecs"  ,template.getVideoCodecs());
-                child.setAttribute("textCodecs"   ,template.getTextCodecs());
-                //Append
+                child.setAttribute("audioCodecs"    ,template.getAudioCodecs());
+                child.setAttribute("videoCodecs"    ,template.getVideoCodecs());
+                child.setAttribute("textCodecs"     ,template.getTextCodecs());
+                //For each properties
+                for (Entry<String,String> entry : template.getProperties().entrySet())
+                {
+                    //Create prop child
+                    Element prop = doc.createElement("property");
+                    //Set attribute
+                    prop.setAttribute("key", entry.getKey());
+                    //Set value
+                    prop.setTextContent(entry.getValue());
+                    //Append ig
+                    child.appendChild(prop);
+                }
+		//Append
                 root.appendChild(child);
             }
 
@@ -314,6 +393,20 @@ public class ConferenceMngr implements Conference.Listener {
                 child.setAttribute("videoBitrate"       ,profile.getVideoBitrate().toString());
                 child.setAttribute("videoFPS"           ,profile.getVideoFPS().toString());
                 child.setAttribute("intraPeriod"        ,profile.getIntraPeriod().toString());
+                child.setAttribute("maxVideoBitrate"    ,profile.getMaxVideoBitrate().toString());
+                child.setAttribute("audioRate"          ,profile.getAudioRate().toString());
+                //For each properties
+                for (Entry<String,String> entry : profile.getProperties().entrySet())
+                {
+                    //Create prop child
+                    Element prop = doc.createElement("property");
+                    //Set attribute
+                    prop.setAttribute("key", entry.getKey());
+                    //Set value
+                    prop.setTextContent(entry.getValue());
+                    //Append ig
+                    child.appendChild(prop);
+                }
                 //Append
                 root.appendChild(child);
             }
@@ -363,8 +456,10 @@ public class ConferenceMngr implements Conference.Listener {
         }
 
         try {
+	    //Create uri
+	    SipURI uri = sf.createSipURI(did,"mcuWeb");
             //Create conference object
-            conf = new Conference(sf, name, did, mixer, size, compType, vad, profile, false);
+            conf = new Conference(sf, name, did, uri, mixer, size, compType, vad, profile, false);
             //If got audio codecs
             if (audioCodecs!=null && !audioCodecs.isEmpty())
             {
@@ -438,9 +533,9 @@ public class ConferenceMngr implements Conference.Listener {
         return conf;
     }
 
-    public Conference createConferenceAdHoc(String did,ConferenceTemplate template)
+    public Conference createConferenceAdHoc(String did,SipURI uri, ConferenceTemplate template)
     {
-        Conference conf = null;
+        final Conference conf;
         //Get first available mixer
         MediaMixer mixer = template.getMixer();
         //Get supported codecs
@@ -450,7 +545,7 @@ public class ConferenceMngr implements Conference.Listener {
 
         try {
             //Create conference object
-            conf = new Conference(sf, template.getName(), did, mixer, template.getSize(), template.getCompType(), template.getVADMode(), template.getProfile(), true);
+            conf = new Conference(sf, template.getName(), did, uri, mixer, template.getSize(), template.getCompType(), template.getVADMode(), template.getProfile(), true);
             //Add listener
             conf.addListener(this);
             //If got audio codecs
@@ -588,7 +683,7 @@ public class ConferenceMngr implements Conference.Listener {
     }
     
     public HashMap<String,MediaMixer> getMediaMixers() {
-        return mixers;
+        return new HashMap<String,MediaMixer>(mixers);
     }
     
     public MediaMixer getMcu(String UID) {
@@ -596,19 +691,19 @@ public class ConferenceMngr implements Conference.Listener {
     }
 
     public HashMap<String, Conference> getConferences() {
-        return conferences;
+        return new HashMap<String,Conference>(conferences);
     }
 
     public HashMap<String, Broadcast> getBroadcasts() {
-        return broadcasts;
+        return new HashMap<String,Broadcast>(broadcasts);
     }
 
     public HashMap<String, ConferenceTemplate> getTemplates() {
-        return templates;
+        return new HashMap<String,ConferenceTemplate>(templates);
     }
 
     public HashMap<String, Profile> getProfiles() {
-        return profiles;
+        return new HashMap<String,Profile>(profiles);
     }
     
     private ConferenceTemplate getConferenceTemplateForDID(String did) {
@@ -635,8 +730,15 @@ public class ConferenceMngr implements Conference.Listener {
         return conf;
     }
 
-    public Broadcast getBroadcast(String UID) {
-        return broadcasts.get(UID);
+    public Broadcast getBroadcast(String UID) throws BroadcastNotFoundExcetpion {
+        //Get broadcast
+        Broadcast bcast = broadcasts.get(UID);
+        //Check if present
+        if (bcast==null)
+            //Throw exception
+            throw new BroadcastNotFoundExcetpion(UID);
+        //Return conference
+        return bcast;
     }
 
     public boolean changeParticipantProfile(String uid, Integer partId, String profileId) throws ConferenceNotFoundExcetpion, ParticipantNotFoundException {
@@ -649,55 +751,60 @@ public class ConferenceMngr implements Conference.Listener {
     }
 
     private Conference searchConferenceByDid(String did) {
-        //Check all conferences
-        for(Conference conf : conferences.values())
-        {
-            //Check did
-            if(did.equals(conf.getDID()))
-                //Return conference
-                return conf;
-        }
+	synchronized(conferences)
+	{
+	    //Check all conferences
+	    for(Conference conf : conferences.values())
+	    {
+		//Check did
+		if(did.equals(conf.getDID()))
+		    //Return conference
+		    return conf;
+	    }
+	}
         //Nothing found
         return null;
-    }
-
-    public Conference fetchConferenceByDID(String did) {
-        //Block
-        synchronized(conferences)
-        {
-            //Log
-            Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINEST, "fetchConferenceByDID for {0}", new Object[]{did});
-            //Search already running conference
-            Conference conf = searchConferenceByDid(did);
-            //Check if found
-            if (conf!=null)
-                //return it
-                return conf;
-                //Find templates
-                ConferenceTemplate temp = getConferenceTemplateForDID(did);
-                //If found
-                if(temp!=null)
-                    //Create conference
-                    return createConferenceAdHoc(did,temp);
-            //No conference available
-            return null;
-        }
     }
 
     public Conference getMappedConference(SipURI from,SipURI uri) {
         //Get did
         String did = uri.getUser();
-    
+
         //Log
         Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINEST, "looking for conference uri={0} did={1}", new Object[]{uri, did});
-        
-        //Search it
-        return fetchConferenceByDID(did);
+
+	//Block
+	synchronized (conferences)
+	{
+	    //Check if there is any conference with that UUID first
+	    try { return getConference(did); } catch (ConferenceNotFoundExcetpion ex) {}
+
+	    Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINEST, "not 3W template looking in conferences");
+	    //Search it
+	    Conference conf = searchConferenceByDid(did);
+	    //If found
+	    if (conf!=null)
+		//Return it
+		return conf;
+	    //Find templates
+	    ConferenceTemplate template = getConferenceTemplateForDID(did);
+	    //If found
+	    if(template!=null)
+		//Create conference
+		return createConferenceAdHoc(did,uri,template);
+	}
+	//NOt found
+	return null;
    }
 
     public MediaMixer addMixer(String name, String url, String ip,String publicIp,String localNet) throws MalformedURLException {
+        //Create uuid for mixer
+        String id = UUID.randomUUID().toString();
         //Create Mixer
-        MediaMixer mixer = new MediaMixer(name,url,ip,publicIp,localNet);
+        MediaMixer mixer = new MediaMixer(id, name,url,ip,publicIp,localNet);
+        //Listen for media mixer events
+        mixer.setListener(this);
+
         synchronized(mixers) {
             //Append
             mixers.put(mixer.getUID(),mixer);
@@ -708,6 +815,10 @@ public class ConferenceMngr implements Conference.Listener {
         return mixer;
     }
     
+    public void editMixer(MediaMixer mixer) {
+        throw new UnsupportedOperationException("Not yet implemented");
+    }
+
     public void removeMixer(String uid) {
         //Get the list of conferences
         Iterator<Conference> it = conferences.values().iterator();
@@ -734,9 +845,9 @@ public class ConferenceMngr implements Conference.Listener {
         }
     }
     
-    public Profile addProfile(String uid, String name, Integer videoSize, Integer videoBitrate, Integer videoFPS, Integer intraPeriod) {
+    public Profile addProfile(String uid, String name, Integer videoSize, Integer videoBitrate, Integer videoFPS, Integer intraPeriod, Integer maxVideoBitrate, Integer audioRate) {
         //Create Profile
-        Profile profile = new Profile(uid, name, videoSize, videoBitrate, videoFPS, intraPeriod);
+        Profile profile = new Profile(uid, name, videoSize, videoBitrate, videoFPS, intraPeriod, maxVideoBitrate, audioRate);
 
         synchronized(profiles) {
             //Append
@@ -745,11 +856,21 @@ public class ConferenceMngr implements Conference.Listener {
             saveProfileConfiguration();
         }
 
-        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "Created profile {0} with size = {1}, {2} fps, bitrate = {3} kb/s intra every {6} frames", new Object[] {name, videoSize, videoFPS, videoBitrate,  intraPeriod } );
+        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "Created profile {0} with size={1}, {2} fps, bitrate={3} kb/s, intra every {4} frames.", new Object[] {name, videoSize, videoFPS, videoBitrate, intraPeriod } );
         //Exit
         return profile;
     }
     
+    public void editProfile(Profile profile) {
+         synchronized(profiles) {
+            //Append
+            profiles.put(profile.getUID(),profile);
+            //Save profiles
+            saveProfileConfiguration();
+        }
+        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "Edited profile uid={0}", new Object[] {profile.getUID()} );
+    }
+
     public void removeProfile(String uid) {
         synchronized(profiles) {
             //Remove profile
@@ -757,9 +878,10 @@ public class ConferenceMngr implements Conference.Listener {
             //Save profiles
             saveProfileConfiguration();
         }
+        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "Removed profile uid={0}", new Object[] {uid} );
     }
 
-    public boolean addConferenceAdHocTemplate(String name, String did, String mixerId, Integer size, Integer compType, Integer vad, String profileId,String audioCodecs,String videoCodecs,String textCodecs) {
+    public ConferenceTemplate addConferenceAdHocTemplate(String name, String did, String mixerId, Integer size, Integer compType, Integer vad, String profileId, Boolean autoAccept, String audioCodecs,String videoCodecs,String textCodecs,String properties) {
         //Get the mixer
         MediaMixer mixer = mixers.get(mixerId);
         //Check mixer
@@ -768,7 +890,7 @@ public class ConferenceMngr implements Conference.Listener {
             //Log
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.WARNING, "Could not add conference ad hoc template, mixer with id={1} not found", mixerId);
             //Error
-            return false;
+            return null;
         }
         //Get profile
         Profile profile = profiles.get(profileId);
@@ -778,12 +900,79 @@ public class ConferenceMngr implements Conference.Listener {
             //Log
             Logger.getLogger(ConferenceMngr.class.getName()).log(Level.WARNING, "Could not add conference ad hoc template, profile with id={1} not found", profileId);
             //Error
+            return null;
+        }
+        //Create the template
+        ConferenceTemplate template = new ConferenceTemplate(name,did,mixer,size,compType,vad,profile,autoAccept,audioCodecs,videoCodecs,textCodecs);
+        //Check properties
+        if (properties!=null && !properties.isEmpty())
+        {
+            try {
+                //Create template properties
+                Properties props = new Properties();
+                //Parse them
+                props.load(new ByteArrayInputStream(properties.getBytes()));
+                //For each one
+                for (Entry entry : props.entrySet())
+                    //Add them
+                    template.addProperty(entry.getKey().toString(),entry.getValue().toString());
+            } catch (IOException ex) {
+                Logger.getLogger(ConferenceMngr.class.getName()).log(Level.WARNING, "Error parsing properties from template", ex);
+            }
+        }
+
+        synchronized(templates) {
+            //Add it to the templates
+            templates.put(template.getUID(),template);
+            //Save configuration
+            saveTemplatesConfiguration();
+        }
+        return template;
+    }
+
+    public boolean editConferenceAdHocTemplate(String uid, String name, String did, String mixerId, Integer size, Integer compType, Integer vad, String profileId, Boolean autoAccept, String audioCodecs, String videoCodecs, String textCodecs, String properties) {
+        //Get the mixer
+        MediaMixer mixer = mixers.get(mixerId);
+        //Check mixer
+        if (mixer==null)
+        {
+            //Log
+            Logger.getLogger(ConferenceMngr.class.getName()).log(Level.WARNING, "Could not edit conference ad hoc template, mixer with id={1} not found", mixerId);
+            //Error
+            return false;
+        }
+        //Get profile
+        Profile profile = profiles.get(profileId);
+        //Check profile
+        if (profile==null)
+        {
+            //Log
+            Logger.getLogger(ConferenceMngr.class.getName()).log(Level.WARNING, "Could not edit conference ad hoc template, profile with id={1} not found", profileId);
+            //Error
             return false;
         }
         //Create the template
-        ConferenceTemplate template = new ConferenceTemplate(name,did,mixer,size,compType,vad,profile,audioCodecs,videoCodecs,textCodecs);
+        ConferenceTemplate template = new ConferenceTemplate(name,did,mixer,size,compType,vad,profile,autoAccept,audioCodecs,videoCodecs,textCodecs);
+        //Check properties
+        if (properties!=null && !properties.isEmpty())
+        {
+            try {
+                //Create template properties
+                Properties props = new Properties();
+                //Parse them
+                props.load(new ByteArrayInputStream(properties.getBytes()));
+                //For each one
+                for (Entry entry : props.entrySet())
+                    //Add them
+                    template.addProperty(entry.getKey().toString(),entry.getValue().toString());
+            } catch (IOException ex) {
+                Logger.getLogger(ConferenceMngr.class.getName()).log(Level.WARNING, "Error parsing properties from template", ex);
+            }
+        }
 
         synchronized(templates) {
+            //Remove old one
+            templates.remove(uid);
             //Add it to the templates
             templates.put(template.getUID(),template);
             //Save configuration
@@ -792,7 +981,16 @@ public class ConferenceMngr implements Conference.Listener {
         return true;
     }
 
-    void removeConferenceAdHocTemplate(String uid) {
+    public void editConferenceTemplate(ConferenceTemplate template) {
+         synchronized(templates) {
+            //Add it to the templates
+            templates.put(template.getUID(),template);
+            //Save configuration
+            saveTemplatesConfiguration();
+        }
+        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "Edited template uid={0}", new Object[] {template.getUID()} );
+    }
+    public void removeConferenceAdHocTemplate(String uid) {
         synchronized(templates) {
             //Remove profile
             templates.remove(uid);
@@ -923,15 +1121,20 @@ public class ConferenceMngr implements Conference.Listener {
             //Exit
             return;
         }
+
+	//LOg
+        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "found conference confId={0}", conf.getUID());
         //Get name
         String name = request.getFrom().getDisplayName();
 
-        //LOg
-        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.INFO, "found conference confId={0}", conf.getUID());
         //If empty
         if (name==null || name.isEmpty() || name.equalsIgnoreCase("anonymous"))
             //Set to user
             name = from.getUser();
+	//If still empty
+	if (name==null)
+	    //use host part
+	    name = from.getHost();
 
         //Log
         Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINEST, "creating participant for confId={0}", conf.getId());
@@ -955,23 +1158,24 @@ public class ConferenceMngr implements Conference.Listener {
     }
 
     public void onConferenceInited(Conference conf) {
-        //Log
-        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINE, "conference inited confId={0}", new Object[]{conf.getId()});
     }
 
     public void onParticipantCreated(String confId, Participant part) {
-        //Log
-        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINE, "participant created confId={0} partName={1}", new Object[]{confId, part.getName()});
     }
 
     public void onParticipantStateChanged(String confId, Integer partId, State state, Object data, Participant part) {
-        //Log
-        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINE, "participant state changed confId={0} partName={1} state={3}", new Object[]{confId, part.getName(), state});
+    }
+
+    public void onParticipantMediaChanged(String confId, Integer partId, Participant part) {
+    }
+
+    public void onParticipantMediaMuted(String confId, Integer partId, Participant part, String media, boolean muted) {
+    }
+
+    public void onOwnerChanged(String confId, Integer partId, Object data, Participant owner) {
     }
 
     public void onParticipantDestroyed(String confId, Integer partId) {
-        //Log
-        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINE, "participant destroyed confId={0} partId={1}", new Object[]{confId, partId});
     }
 
     public void addListener(Listener listener) {
@@ -1046,6 +1250,9 @@ public class ConferenceMngr implements Conference.Listener {
         Conference conf = getConference(confId);
         //Remove mosaic participant
         conf.removeMosaicParticipant(mosaicId, partId);
+    }
+
+    public void onMediaMixerReconnected(MediaMixer mediaMixer, Map<Integer, ConferenceInfo> mixerConferences) {
     }
 
     public void onConferenceParticipantRequestFPU(MediaMixer mixer, Integer confId, String tag, Integer partId) {

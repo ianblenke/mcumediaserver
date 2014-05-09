@@ -11,6 +11,10 @@
     <form method="POST" action="controller/addMixer">
         <table class="form">
             <tr>
+                <td>Id:</td>
+                <td><input type="text" name="uid"></td>
+            </tr>
+            <tr>
                 <td>Name:</td>
                 <td><input type="text" name="name"></td>
             </tr>

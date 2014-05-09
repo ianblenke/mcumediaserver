@@ -46,6 +46,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 import javax.xml.bind.DatatypeConverter;
+import javax.xml.bind.annotation.XmlElement;
 import org.apache.xmlrpc.XmlRpcException;
 import org.murillo.MediaServer.Codecs;
 import org.murillo.MediaServer.Codecs.Direction;
@@ -54,6 +55,7 @@ import org.murillo.MediaServer.Codecs.Setup;
 import org.murillo.MediaServer.XmlRpcMcuClient;
 import org.murillo.MediaServer.XmlRpcMcuClient.MediaStatistics;
 import org.murillo.abnf.ParserException;
+import org.murillo.mcuWeb.Participant.State;
 import org.murillo.sdp.Attribute;
 import org.murillo.sdp.Bandwidth;
 import org.murillo.sdp.Connection;
@@ -108,11 +110,12 @@ public class RTPParticipant extends Participant {
     private SessionDescription remoteSDP;
     private SessionDescription localSDP;
     private Boolean isSecure;
+    private Boolean useDTLS;
     private Boolean rtcpFeedBack;
     private HashMap<String,CryptoInfo> localCryptoInfo;
     private HashMap<String,CryptoInfo> remoteCryptoInfo;
     private HashMap<String,DTLSInfo> remoteDTLSInfo;
-    private boolean useICE;
+    private Boolean useICE;
     private HashMap<String,ICEInfo> localICEInfo;
     private HashMap<String,ICEInfo> remoteICEInfo;
     private HashMap<String,HashMap<String,String>> rtpMediaProperties;
@@ -125,7 +128,7 @@ public class RTPParticipant extends Participant {
     private SipURI proxy;
     private boolean useInfo;
     private boolean useUpdate;
-    private boolean useDTLS;
+
 
     public static final String ALLOWED = "INVITE, CANCEL, UPDATE, INFO, OPTIONS, BYE";
     private String localFingerprint;
@@ -165,15 +168,28 @@ public class RTPParticipant extends Participant {
     }
 
     private static class DTLSInfo {
-	String setup;
+	Setup setup;
 	String hash;
 	String fingerprint;
 
-	public DTLSInfo(String setup,String hash, String fingerprint) {
+	public DTLSInfo(Setup setup,String hash, String fingerprint) {
    	    this.setup = setup;
 	    this.hash = hash;
 	    this.fingerprint = fingerprint;
 	}
+
+	public String getFingerprint() {
+	    return fingerprint;
+    }
+
+	public String getHash() {
+	    return hash;
+	}
+
+	public Setup getSetup() {
+	    return setup;
+	}
+
     }
 
     private static class ICEInfo
@@ -210,9 +226,9 @@ public class RTPParticipant extends Participant {
         }
     }
 
-    RTPParticipant(Integer id,String name,Integer mosaicId,Integer sidebarId,Conference conf) throws XmlRpcException {
+    RTPParticipant(Integer id,String name,String token,Integer mosaicId,Integer sidebarId,Conference conf) throws XmlRpcException {
         //Call parent
-        super(id,name,mosaicId,sidebarId,conf,Type.SIP);
+        super(id,name,token,mosaicId,sidebarId,conf,Type.SIP);
         //No sending ports
         sendAudioPort = 0;
         sendVideoPort = 0;
@@ -294,11 +310,11 @@ public class RTPParticipant extends Participant {
     public void restart(Integer partId) {
 	//Store new id
 	id = partId;
-        //Get mcu client
-        XmlRpcMcuClient client = conf.getMCUClient();
         try {
+	    //Get client
+            XmlRpcMcuClient client = conf.getMCUClient();
             //Create participant in mixer conference and store new id
-            id = client.CreateParticipant(id, name.replace('.', '_'), type.valueOf(),mosaicId,sidebarId);
+            id = client.CreateParticipant(id, name.replace('.', '_'), getToken(), type.valueOf(),mosaicId,sidebarId);
             //Check state
             if (state!=State.CREATED)
             {
@@ -324,6 +340,12 @@ public class RTPParticipant extends Participant {
 
     public Address getAddress() {
         return address;
+    }
+
+    @XmlElement(name="uri")
+    public String getUri() {
+	//Return uri as string
+	return address!=null?address.getURI().toString():null;
     }
 
     public String getUsername() {
@@ -659,6 +681,11 @@ public class RTPParticipant extends Participant {
             return md;
         }
 
+        //Check if we need to set the maximun bitrate
+        if (mediaName.equals("video") && profile.getMaxVideoBitrate()>0)
+            //Add bandwidth
+            md.addBandwidth("AS",profile.getMaxVideoBitrate());
+
         //If we are using ice
         if (useICE)
         {
@@ -689,8 +716,12 @@ public class RTPParticipant extends Participant {
 		md.addAttribute(new FingerprintAttribute(localHash, localFingerprint));
 		//Get our setup
 		Setup setup = rtpSetups.get(mediaName);
+		//If not set up
+		if (setup==null)
+		    //Then set it to actpass
+		    setup = Setup.ACTPASS;
 		//Add setup atttribute
-		md.addAttribute("setup",setup!=null?setup.valueOf():"passive");
+		md.addAttribute("setup",setup.valueOf());
 		//Add connection attribute
 		md.addAttribute("connection","new");
 	    } else {
@@ -1153,17 +1184,17 @@ public class RTPParticipant extends Participant {
 		if (useDTLS)
 		{
 		    //Set deault setup
-		    String setup = "actpass";
+		    Setup setup = Setup.ACTPASS;
 		    //Get setup attribute
 		    Attribute attr = md.getAttribute("setup");
 		    //Chekc it
 		    if (attr!=null)
 			//Set it
-			setup = attr.getValue();
+			setup = Setup.byValue(attr.getValue());
 		    //Create new DTLS info
 		    remoteDTLSInfo.put(media, new DTLSInfo(setup,remoteHash,remoteFingerprint));
 		    //Set ur setup as reverese of remote
-		    rtpSetups.put(media, Setup.byValue(setup).reverse());
+		    rtpSetups.put(media, setup.reverse());
 		} else {
 		    //Check crypto attribute
                 CryptoAttribute crypto = (CryptoAttribute) md.getAttribute("crypto");
@@ -1533,8 +1564,6 @@ public class RTPParticipant extends Participant {
         }
         //Store address
         address = inviteRequest.getFrom();
-        //Get name
-        name = getUsernameDomain();
         //Get call id
         setSessionId(inviteRequest.getCallId());
         //Create ringing
@@ -1660,7 +1689,9 @@ public class RTPParticipant extends Participant {
             SipServletResponse resp = inviteRequest.createResponse(200, "Ok");
             //Add custom headers with conf id and participant id
             resp.addHeader("X-Conference-ID", conf.getUID());
+	    resp.addHeader("X-Conference-Mixer-ID", conf.getId().toString());
 	    resp.addHeader("X-Participant-ID", id.toString());
+	    resp.addHeader("X-Participant-Token", getToken());
             //Check session refresh request
             if (timerSupported && sessionExpires>0)
             {
@@ -1762,7 +1793,9 @@ public class RTPParticipant extends Participant {
             inviteRequest = sf.createRequest(appSession, "INVITE", from, to);
             //Add custom headers with conf id and participant id
             inviteRequest.addHeader("X-Conference-ID", conf.getUID());
+	    inviteRequest.addHeader("X-Conference-Mixer-ID", conf.getId().toString());
 	    inviteRequest.addHeader("X-Participant-ID", id.toString());
+	    inviteRequest.addHeader("X-Participant-Token", getToken());
             //Check if we have a proxy
             if (proxy!=null)
                 //Set proxy
@@ -1912,8 +1945,6 @@ public class RTPParticipant extends Participant {
             session.setInvalidateWhenReady(false);
             //Update name
             address = resp.getTo();
-            //Update name
-            name = getUsernameDomain();
             try {
                 //Parse sdp
                 remoteSDP = processSDP(new String((byte[])resp.getContent()));
@@ -1998,7 +2029,7 @@ public class RTPParticipant extends Participant {
     }
 
     public void onTimeout() {
-        Logger.getLogger(RTPParticipant.class.getName()).log(Level.INFO, "onTimeout state {0}", state);
+        Logger.getLogger(RTPParticipant.class.getName()).log(Level.INFO, "onTimeout partId={0} state {1} totalPacketCount={2}", new Object[]{id,state,totalPacketCount});
         //Check state
         if (state==State.CONNECTED) {
             //Extend session 1 minutes
@@ -2048,13 +2079,16 @@ public class RTPParticipant extends Participant {
             //Process it
             proccesContent(request.getContentType(),request.getContent());
         try {
+	    //If it is not n ACK for a reInvite
+	    if (state!=State.CONNECTED)
+	    {
             //Set state before joining
             setState(State.CONNECTED);
             //Join it to the conference
             conf.joinParticipant(this);
             //Start sending
             startSending();
-
+	    }
         } catch (XmlRpcException ex) {
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -2275,16 +2309,16 @@ public class RTPParticipant extends Participant {
         {
             //Create rtp map for audio
             createRTPMap("audio");
+
             //Check if we are secure
             if (isSecure)
             {
-                //Create new cypher
-                CryptoInfo info = CryptoInfo.Generate();
-                //Set it
-                client.SetLocalCryptoSDES(confId, id, MediaType.AUDIO, info.suite, info.key);
-                //Add to local info
-                localCryptoInfo.put("audio", info);
+                //Create new cypher and add to local info
+                localCryptoInfo.put("audio", CryptoInfo.Generate());
+		//Set property
+		rtpMediaProperties.get("audio").put("secure","1");
             }
+
             //Check if using ICE
             if (useICE)
             {
@@ -2304,16 +2338,16 @@ public class RTPParticipant extends Participant {
         {
             //Create rtp map for video
             createRTPMap("video");
+
             //Check if we are secure
             if (isSecure)
             {
-                //Create new cypher
-                CryptoInfo info = CryptoInfo.Generate();
-                //Set it
-                client.SetLocalCryptoSDES(confId, id, MediaType.VIDEO, info.suite, info.key);
-                //Add to local info
-                localCryptoInfo.put("video", info);
+                //Create new cypher and add to local info
+                localCryptoInfo.put("video", CryptoInfo.Generate());
+		//Set property
+		rtpMediaProperties.get("video").put("secure","1");
             }
+
             //Check if using ICE
             if (useICE)
             {
@@ -2333,16 +2367,16 @@ public class RTPParticipant extends Participant {
         {
             //Create rtp map for text
             createRTPMap("text");
+
             //Check if we are secure
             if (isSecure)
             {
-                //Create new cypher
-                CryptoInfo info = CryptoInfo.Generate();
-                //Set it
-                client.SetLocalCryptoSDES(confId, id, MediaType.TEXT, info.suite, info.key);
-                //Add to local info
-                localCryptoInfo.put("text", info);
+                //Create new cypher and add to local info
+                localCryptoInfo.put("text", CryptoInfo.Generate());
+		//Set property
+		rtpMediaProperties.get("text").put("secure","1");
             }
+
             //Check if using ICE
             if (useICE)
             {
@@ -2415,14 +2449,21 @@ public class RTPParticipant extends Participant {
 		//If present
 		if (info!=null)
 		    //Set it
-		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.AUDIO, info.setup, info.hash, info.fingerprint);
+		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.AUDIO, info.getSetup(), info.getHash(), info.getFingerprint());
 	    } else {
+		//Get local crypto info
+		CryptoInfo local = localCryptoInfo.get("audio");
+		//If present
+		if (local!=null)
+		    //Set it
+		    client.SetLocalCryptoSDES(confId, id, MediaType.AUDIO, local.suite, local.key);
+
 		//Get cryto info
-            CryptoInfo info = remoteCryptoInfo.get("audio");
+		CryptoInfo remote = remoteCryptoInfo.get("audio");
             //If present
-            if (info!=null)
+		if (remote!=null)
                 //Set it
-               client.SetRemoteCryptoSDES(confId, id, MediaType.AUDIO, info.suite, info.key);
+	           client.SetRemoteCryptoSDES(confId, id, MediaType.AUDIO, remote.suite, remote.key);
 	    }
 
             //Get ice info
@@ -2446,14 +2487,21 @@ public class RTPParticipant extends Participant {
 		//If present
 		if (info!=null)
 		    //Set it
-		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.VIDEO, info.setup, info.hash, info.fingerprint);
+		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.VIDEO, info.getSetup(), info.getHash(), info.getFingerprint());
 	    } else {
+		//Get local crypto info
+		CryptoInfo local = localCryptoInfo.get("video");
+		//If present
+		if (local!=null)
+		    //Set it
+		    client.SetLocalCryptoSDES(confId, id, MediaType.VIDEO, local.suite, local.key);
+
 		//Get cryto info
-            CryptoInfo info = remoteCryptoInfo.get("video");
+		CryptoInfo remote = remoteCryptoInfo.get("video");
             //If present
-            if (info!=null)
+		if (remote!=null)
                 //Set it
-               client.SetRemoteCryptoSDES(confId, id, MediaType.VIDEO, info.suite, info.key);
+	           client.SetRemoteCryptoSDES(confId, id, MediaType.VIDEO, remote.suite, remote.key);
 	    }
 
                         //Get ice info
@@ -2477,14 +2525,21 @@ public class RTPParticipant extends Participant {
 		//If present
 		if (info!=null)
 		    //Set it
-		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.TEXT, info.setup, info.hash, info.fingerprint);
+		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.TEXT, info.getSetup(), info.getHash(), info.getFingerprint());
 	    } else {
+		//Get local crypto info
+		CryptoInfo local = localCryptoInfo.get("text");
+		//If present
+		if (local!=null)
+		    //Set it
+		    client.SetLocalCryptoSDES(confId, id, MediaType.TEXT, local.suite, local.key);
+
 		//Get cryto info
-            CryptoInfo info = remoteCryptoInfo.get("text");
+		CryptoInfo remote = remoteCryptoInfo.get("text");
             //If present
-            if (info!=null)
+		if (remote!=null)
                 //Set it
-               client.SetRemoteCryptoSDES(confId, id, MediaType.TEXT, info.suite, info.key);
+	           client.SetRemoteCryptoSDES(confId, id, MediaType.TEXT, remote.suite, remote.key);
 	    }
             //Get ice info
             ICEInfo ice = remoteICEInfo.get("text");

@@ -19,90 +19,132 @@
 
 package org.murillo.mcuWeb;
 
+import java.util.ArrayList;
+import javax.servlet.sip.ServletParseException;
+import java.io.Serializable;
 import java.text.SimpleDateFormat;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TimeZone;
 import java.util.UUID;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.sip.Address;
-import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipURI;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlType;
 import org.apache.xmlrpc.XmlRpcException;
 import org.murillo.MediaServer.Codecs;
 import org.murillo.MediaServer.XmlRpcMcuClient;
 import org.murillo.MediaServer.XmlRpcMcuClient.MediaStatistics;
+import org.murillo.mcu.exceptions.ParticipantNotFoundException;
 import org.murillo.mcuWeb.Participant.State;
-import org.murillo.mcuWeb.exceptions.ParticipantNotFoundException;
 
 /**
  *
  * @author esergar
  */
-public class Conference implements Participant.Listener {
+@XmlType
+@XmlAccessorType(XmlAccessType.NONE)
+public class Conference implements Participant.Listener,Serializable {
+
+    public void onMediaChanged(Participant part) {
+    }
+
+    public void onMediaMuted(Participant part, String media, boolean muted) {
+    }
 
     public interface Listener {
         public void onConferenceInited(Conference conf);
         public void onConferenceEnded(Conference conf);
         public void onParticipantCreated(String confId, Participant part);
         public void onParticipantStateChanged(String confId, Integer partId, State state, Object data, Participant part);
+	public void onParticipantMediaChanged(String confId, Integer partId, Participant part);
+	public void onParticipantMediaMuted(String confId,  Integer partId, Participant part,String media, boolean muted);
         public void onParticipantDestroyed(String confId, Integer partId);
+	public void onOwnerChanged(String confId, Integer partId, Object data, Participant owner);
     }
 
     protected Integer id;
     protected String UID;
+    @XmlElement
     protected Date timestamp;
+    @XmlElement
     protected String name;
+    @XmlElement
     protected String did;
+    @XmlElement
+    protected SipURI uri;
     protected XmlRpcMcuClient client;
+    @XmlElement
     protected MediaMixer mixer;
-    protected HashMap<Integer,Participant> participants;
+    protected ConcurrentHashMap<Integer,Participant> participants;
+    @XmlElement
     protected int numActParticipants;
+    @XmlElement
     protected Integer vad;
-    protected Integer compType;
-    protected Integer size;
-    protected Integer numSlots;
-    protected Integer slots[];
+    @XmlElement
+    protected boolean autoAccept;
+    @XmlElement
     protected Boolean isAdHoc;
     protected Profile profile;
     protected SipFactory sf;
+    @XmlElement
     protected boolean addToDefaultMosaic;
     protected boolean isDestroying;
-    protected boolean autoAccept;
     protected HashSet<Listener> listeners;
     protected HashMap<String,List<Integer>> supportedCodecs = null;
     protected HashMap<String,String> properties = null;
+    @XmlElement
     private SipURI defaultProxyUri;
+    @XmlElement
     private Boolean defatultRtcpFeedBack;
+    @XmlElement
     private boolean defaultUseIce;
+    @XmlElement
     private Boolean defaultIsSecure;
+    @XmlElement
     private boolean defaultUseDTLS;
+    @XmlElement
     private boolean broadcasting;
 
-    private static final Logger logger =  Logger.getLogger(ConferenceMngr.class.getName());
+    private Integer numSlots;
+    private Integer compType;
+    private Integer size;
+    private Integer slots[];
+
+
+    private static final Logger logger =  Logger.getLogger(Conference.class.getName());
+
+    public Conference(){
+        //Empty constructor for XML serializator
+    }
 
     /** Creates a new instance of Conference */
-    public Conference(SipFactory sf,String name,String did,MediaMixer mixer,Integer size,Integer compType,Integer vad, Profile profile,Boolean isAdHoc) throws XmlRpcException {
+    public Conference(SipFactory sf,String name,String did,SipURI uri,MediaMixer mixer,Integer size,Integer compType,Integer vad, Profile profile,Boolean isAdHoc) throws XmlRpcException {
         //Create the client
         this.client = mixer.createMcuClient();
-        //Generate a uuid
-        UID = UUID.randomUUID().toString();
+        //Generate a uuid and apped it to the did to get an unique id not overlapping with the did
+        UID = did+"-"+UUID.randomUUID().toString();
         //Create conference
-        this.id = client.CreateConference(UID,vad,-1);
+        this.id = client.CreateConference(UID,vad,profile.getAudioRate(),mixer.getEventQueueId());
         //Get timestamp
         this.timestamp = new Date();
         //Save values
         this.mixer = mixer;
         this.name = name;
         this.did = did;
+	this.uri = uri;
         this.profile = profile;
         this.isAdHoc = isAdHoc;
         this.vad = vad;
@@ -145,7 +187,7 @@ public class Conference implements Participant.Listener {
         addSupportedCodec("text", Codecs.T140RED);
         addSupportedCodec("text", Codecs.T140);
         //Create the participant map
-        participants = new HashMap<Integer,Participant>();
+        participants = new ConcurrentHashMap<Integer,Participant>();
         //Set composition type
         client.SetCompositionType(id,XmlRpcMcuClient.DefaultMosaic,compType, size);
         //If it is a 1P type set fist slot for VAD
@@ -181,14 +223,10 @@ public class Conference implements Participant.Listener {
             return;
         //We are isDestroying
         isDestroying = true;
-        //Get the list of participants
-        Iterator<Participant> it = participants.values().iterator();
-        //For each one
-        while(it.hasNext())
+        //For each participant
+        for (Participant part : participants.values())
         {
             try {
-                //Get the participant
-                Participant part = it.next();
                 //Disconnect
                 part.end();
             } catch (Exception ex) {
@@ -197,8 +235,6 @@ public class Conference implements Participant.Listener {
         }
 
         try {
-            //Stop recording
-            stopRecordingBroadcater();
             //Check if broadcasting
             if (broadcasting)
                 //Stop broadcast
@@ -279,10 +315,6 @@ public class Conference implements Participant.Listener {
         this.size = size;
     }
 
-    public HashMap<Integer,Participant> getParticipants()   {
-        return participants;
-    }
-
     public void setDefatultRtcpFeedBack(Boolean defatultRtcpFeedBack) {
         this.defatultRtcpFeedBack = defatultRtcpFeedBack;
     }
@@ -318,8 +350,14 @@ public class Conference implements Participant.Listener {
         return name;
     }
 
+    @XmlElement(name="id")
     public String getUID() {
         return UID;
+    }
+
+    @XmlElement(name="defaultProxy")
+    public String getDefaultProxy() {
+        return defaultProxyUri!=null?defaultProxyUri.toString():null;
     }
 
     public String getDID() {
@@ -389,13 +427,15 @@ public class Conference implements Participant.Listener {
             if (name==null)
                 //Empte name
                 name = "";
+	    //Create unique auth token
+	    String token = UUID.randomUUID().toString();
             //Create participant in mixer conference
-            Integer partId = client.CreateParticipant(id,name.replace('.','_'),type.valueOf(),mosaicId,sidebarId);
+            Integer partId = client.CreateParticipant(id,name.replace('.','_'),token,type.valueOf(),mosaicId,sidebarId);
             //Check type
             if (type==Participant.Type.SIP)
             {
                 //Create the participant
-                part = new RTPParticipant(partId,name,mosaicId,sidebarId,this);
+                part = new RTPParticipant(partId,name,token,mosaicId,sidebarId,this);
                 //Set defaults
                 ((RTPParticipant)part).setIsSecure(defaultIsSecure);
                 ((RTPParticipant)part).setUseICE(defaultUseIce);
@@ -475,11 +515,11 @@ public class Conference implements Participant.Listener {
         if (addToDefaultMosaic)
         {
             //Check if video is supported
-            if (part.getVideoSupported())
+            if (part.getVideoSupported() && part.isSending("video"))
                 //Add it to the default mosiac
                 client.AddMosaicParticipant(id, XmlRpcMcuClient.DefaultMosaic, partId);
             //Check if audio is supported
-            if (part.getAudioSupported())
+            if (part.getAudioSupported() && part.isSending("audio"))
                 //Add it to the default sidebar
                 client.AddSidebarParticipant(id, XmlRpcMcuClient.DefaultSidebar, partId);
         }
@@ -633,15 +673,15 @@ public class Conference implements Participant.Listener {
         }
     }
 
-    public void onStateChanged(Participant part, State state) {
+    public void onStateChanged(Participant part, State state,State prev) {
         //If we are destroying
         if (isDestroying)
             //Exit
             return;
         //Launch event
-        fireOnParticipantStateChanged(part,state,null);
+        fireOnParticipantStateChanged(part,state,part.getData());
         //Check previous state
-        if (part.getState().equals(State.CREATED))
+        if (prev.equals(State.CREATED))
         {
                 //Increase the number of active participanst
                 numActParticipants++;
@@ -656,9 +696,9 @@ public class Conference implements Participant.Listener {
                 numActParticipants--;
             //Delete
             participants.remove(part.getId());
-                //Check if it is an add hoc conference and there are not any other participant
-                if(isAdHoc && numActParticipants==0 && !isDestroying)
-                    //We are finished
+            //Check if it is an add hoc conference and there are not any other participant
+            if(numActParticipants<1 && !isDestroying)
+                //We are finished
                 destroy();
         }
     }
@@ -702,6 +742,8 @@ public class Conference implements Participant.Listener {
      }
 
      private void fireOnConferenceInited() {
+         //Log
+        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINE, "conference inited confId={0}", new Object[]{getId()});
         //For each listener in set
         for (Listener listener : listeners)
             //Send it
@@ -709,6 +751,8 @@ public class Conference implements Participant.Listener {
      }
 
      private void fireOnConferenceEnded() {
+	  //Log
+        Logger.getLogger(ConferenceMngr.class.getName()).log(Level.FINE, "conference ended confId={0}", new Object[]{getId()});
         //For each listener in set
         for (Listener listener : listeners)
             //Send it
@@ -822,5 +866,13 @@ public class Conference implements Participant.Listener {
                 .replace("${DATE}", date)
                 .replace("${NAME}", getName())
                 .replace("${ID}", getId().toString());
+    }
+    SipURI getSipURI() {
+	return uri;
+    }
+
+    @XmlElement(name="uri")
+    String getUri() {
+	return uri.toString();
     }
 }

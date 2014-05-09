@@ -29,8 +29,9 @@ import javax.servlet.*;
 import javax.servlet.http.*;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
-import org.murillo.mcuWeb.exceptions.ConferenceNotFoundExcetpion;
-import org.murillo.mcuWeb.exceptions.ParticipantNotFoundException;
+import org.murillo.mcu.exceptions.ConferenceNotFoundExcetpion;
+import org.murillo.mcu.exceptions.ParticipantNotFoundException;
+
 
 /**
  *
@@ -194,14 +195,14 @@ public class MCUHttpServlet extends HttpServlet {
                 response.sendRedirect(path+"/conference.jsp?uid=" + uid);
             } else if (method.equals("addProfile")) {
                 //Get parameters
-                    String  uid  = request.getParameter("uid");
+                String  uid  = request.getParameter("uid");
                 String  name  = request.getParameter("name");
                 Integer videoSize = Integer.parseInt(request.getParameter("videoSize"));
                 Integer videoBitrate = Integer.parseInt(request.getParameter("videoBitrate"));
                 Integer videoFPS = Integer.parseInt(request.getParameter("videoFPS"));
                 Integer intraPeriod = Integer.parseInt(request.getParameter("intraPeriod"));
                 //Call
-                confMngr.addProfile(uid,name,videoSize,videoBitrate,videoFPS,intraPeriod);
+                confMngr.addProfile(uid,name,videoSize,videoBitrate,videoFPS,intraPeriod,0,8000);
                 //Redirect
                 response.sendRedirect(path);
             } else if (method.equals("removeProfile")) {
@@ -230,7 +231,7 @@ public class MCUHttpServlet extends HttpServlet {
                 //Redirect
                 response.sendRedirect(path);
               } else if (method.equals("addConferenceAdHocTemplate")) {
-                //Get parameters
+		//Get parameters
                 String name         = request.getParameter("name");
                 String did          = request.getParameter("did");
                 String mixerId      = request.getParameter("mixerId");
@@ -243,7 +244,7 @@ public class MCUHttpServlet extends HttpServlet {
                 String videoCodecs = request.getParameter("videoCodecs");
                 String textCodecs = request.getParameter("textCodecs");
                 //Call
-                confMngr.addConferenceAdHocTemplate(name,did,mixerId,size,compType,vad,profileId,audioCodecs,videoCodecs,textCodecs);
+                confMngr.addConferenceAdHocTemplate(name,did,mixerId,size,compType,vad,profileId,true,audioCodecs,videoCodecs,textCodecs,"");
                 //Redirect
                 response.sendRedirect(path);
             } else if (method.equals("removeConferenceAdHocTemplate")) {
