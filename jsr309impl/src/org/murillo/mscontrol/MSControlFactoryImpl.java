@@ -8,6 +8,7 @@ package org.murillo.mscontrol;
 import java.io.Reader;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
@@ -236,5 +237,16 @@ public class MSControlFactoryImpl implements MsControlFactory, MediaServerEventQ
                 driver.unregisterMediaSessionList(sessions);
             }
         }
+    }
+
+    public MediaSessionImpl getMediaSession(String id) throws URISyntaxException {
+	//Create uri
+        URI uri = new URI("mscontrol", uuid, "/MediaSessions/" + id, null);
+	//Return it
+	return sessions.get(uri);
+    }
+
+    public Collection<MediaSessionImpl> getMediaSessions() {
+	return sessions.values();
     }
 }

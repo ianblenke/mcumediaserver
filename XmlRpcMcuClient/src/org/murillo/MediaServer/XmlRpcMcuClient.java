@@ -26,6 +26,10 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlType;
 import org.murillo.MediaServer.Codecs.MediaType;
 import org.murillo.MediaServer.Codecs.Setup;
 
@@ -35,13 +39,22 @@ import org.murillo.MediaServer.Codecs.Setup;
  */
 public class XmlRpcMcuClient {
 
+    @XmlType()
+    @XmlAccessorType(XmlAccessType.NONE)
     public static class MediaStatistics {
+	@XmlElement
 	public boolean	isSending = false;
+	@XmlElement
 	public boolean	isReceiving = false;
+	@XmlElement
         public Integer	lostRecvPackets = 0;
+	@XmlElement
 	public Integer	numRecvPackets = 0;
+	@XmlElement
 	public Integer	numSendPackets = 0;
+	@XmlElement
 	public Integer	totalRecvBytes = 0;
+	@XmlElement
 	public Integer	totalSendBytes = 0;
 
     };

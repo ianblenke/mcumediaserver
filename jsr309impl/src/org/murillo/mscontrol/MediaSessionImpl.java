@@ -7,6 +7,7 @@ package org.murillo.mscontrol;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -181,6 +182,14 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
         return mediaGroups.get(groupUri);
     }
 
+    public NetworkConnectionImpl getNetworkConnection(String uid) throws MsControlException {
+	//Create chidl uri
+        URI child = createChildURI(uid,uri);
+	//Get network connection
+	return networkconnections.get(child);
+    }
+
+
     @Override
     public MediaMixer createMediaMixer(Configuration<MediaMixer> config) throws MsControlException {
         //Create mixer
@@ -323,9 +332,9 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
         if (NetworkConnection.class.equals(type))
             return (Iterator<T>) networkconnections.values().iterator();
         else if (MediaGroup.class.equals(type))
-            return (Iterator<T>) networkconnections.values().iterator();
-        else if (MediaServer.class.equals(type))
-            return (Iterator<T>) networkconnections.values().iterator();
+            return (Iterator<T>) mediaGroups.values().iterator();
+        else if (MediaMixer.class.equals(type))
+            return (Iterator<T>) mixers.values().iterator();
         else
             return null;
     }
@@ -338,4 +347,9 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
             Logger.getLogger("jsr309").log(Level.SEVERE,"Error executing task",ex);
         }
     }
+
+    public Collection<NetworkConnectionImpl> getNetworkCollections() {
+	return networkconnections.values();
+    }
+
 }

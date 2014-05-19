@@ -1029,8 +1029,8 @@ public class RTPParticipant extends Participant {
             //Get transport
             ArrayList<String> proto = md.getProto();
 
-            //If it its not RTP
-            if (!proto.get(0).equals("RTP"))
+            //If it its not RTP (i.e. RTP/(s)AVP(f) or UDP/TLS/RTP/SAVP(f)
+            if (!proto.get(proto.size()-2).equals("RTP"))
             {
                 //Create media descriptor
                 MediaDescription rejected = new MediaDescription(media,0,md.getProtoString());
@@ -1151,16 +1151,14 @@ public class RTPParticipant extends Participant {
                     mediaIp = "0.0.0.0";
             }
 
-            //Get rtp profile
-            String rtpProfile = proto.get(1);
 	    //Check if it is DTLS
-	    if (rtpProfile.equals("TLS"))
-	    {
+	    if (proto.get(0).equals("UDP") && proto.get(1).equals("TLS"))
 		    //Using DTLS
 		    useDTLS = true;
-		    //Get profile
-		    rtpProfile = proto.get(2);
-	    }
+
+	    //Get rtp profile
+            String rtpProfile = proto.get(proto.size()-1);
+
             //Check if it is secure
             if (rtpProfile.startsWith("S"))
             {

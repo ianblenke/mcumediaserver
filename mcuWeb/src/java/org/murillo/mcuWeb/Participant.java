@@ -217,7 +217,7 @@ public abstract class Participant  implements Serializable {
     }
 
     protected void mutedMedia(String media,boolean muted) {
-	Logger.getLogger(Participant.class.getName()).log(Level.FINE, "Partipant {0} muted {1} {2} {", new Object[]{getId(),media,muted});
+	Logger.getLogger(Participant.class.getName()).log(Level.FINE, "Partipant {0} muted {1} {2}", new Object[]{getId(),media,muted});
         //Call listeners
         for(Listener listener : listeners)
             //Call it

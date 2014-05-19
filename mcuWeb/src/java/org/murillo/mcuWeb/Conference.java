@@ -307,6 +307,10 @@ public class Conference implements Participant.Listener,Serializable {
         return numSlots;
     }
 
+    public Collection<Participant> getParticipants() {
+	return participants.values();
+    }
+
     public Integer getNumParcitipants() {
         return numActParticipants;
     }

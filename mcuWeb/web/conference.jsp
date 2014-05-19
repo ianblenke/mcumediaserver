@@ -1,3 +1,4 @@
+<%@page import="org.murillo.mcu.exceptions.ConferenceNotFoundExcetpion"%>
 <%@page contentType="text/html"%>
 <%@page pageEncoding="UTF-8"%>
 <%@page import="java.util.HashMap"%>
@@ -7,7 +8,7 @@
 <%@page import="org.murillo.mcuWeb.Conference"%>
 <%@page import="org.murillo.mcuWeb.ConferenceMngr"%>
 <%@page import="org.murillo.mcuWeb.MediaMixer"%>
-<%@page import="org.murillo.mcuWeb.exceptions.ConferenceNotFoundExcetpion"%>
+<%@page import="org.murillo.mcu.exceptions.ConferenceNotFoundExcetpion"%>
 <%@page import="org.murillo.MediaServer.XmlRpcMcuClient"%>
 <%
     Conference conf;
@@ -82,7 +83,7 @@
 			    %><option value="-2" <%=slots[i].equals(-2)?"selected":""%>>VAD<%
 		    }
                     //iterate
-		    for (Participant part : conf.getParticipants().values())
+		    for (Participant part : conf.getParticipants())
                     {
                         //Print it
                         %><option value="<%=part.getId()%>" <%=slots[i].equals(part.getId())?"selected":""%>><%=part.getName()%><%
@@ -140,7 +141,6 @@
 			%><option value="<%=entry.getKey()%>" <%=conf.getSize()==entry.getKey()?"selected":""%>><%=entry.getValue()%><%
 		}
 	%></select></td>
-                </td>
             </tr>
             <tr>
                 <td>Default profile:</td>
@@ -190,7 +190,7 @@
             <th>Actions</th>
         </tr>
         <%
-        for (Participant part : conf.getParticipants().values())
+        for (Participant part : conf.getParticipants())
 	{
             %>
         <tr>
