@@ -597,6 +597,16 @@ public class XmlRpcMcuClient {
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }
+    
+    public boolean StartBroadcaster(Integer confId, HashMap<String,String> properties) throws XmlRpcException
+    {
+        //Create request
+        Object[] request = new Object[]{confId,properties};
+        //Execute
+        HashMap response = (HashMap) client.execute("StartBroadcaster", request);
+        //Return
+        return (((Integer)response.get("returnCode"))==1);
+    }
 
     public boolean StopBroadcaster(Integer confId) throws XmlRpcException
     {
