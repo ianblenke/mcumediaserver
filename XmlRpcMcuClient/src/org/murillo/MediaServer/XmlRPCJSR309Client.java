@@ -43,16 +43,30 @@ public class XmlRPCJSR309Client {
     public static final Integer SD480P	= 19; // 480  x 360	AR:	1,333333333
     public static final Integer SQCIF	= 20; // 128  x 96	AR:	1,333333333
     public static final Integer SCIF	= 21; // 256  x 192	AR:	1,333333333
-
-    public static final Integer MOSAIC1x1  = 0;
-    public static final Integer MOSAIC2x2  = 1;
-    public static final Integer MOSAIC3x3  = 2;
-    public static final Integer MOSAIC3p4  = 3;
-    public static final Integer MOSAIC1p7  = 4;
-    public static final Integer MOSAIC1p5  = 5;
-    public static final Integer MOSAIC1p1  = 6;
-    public static final Integer MOSAICPIP1 = 7;
-    public static final Integer MOSAICPIP3 = 8;
+    
+    public static final Integer MOSAIC1x1      = 0;
+    public static final Integer MOSAIC2x2      = 1;
+    public static final Integer MOSAIC3x3      = 2;
+    public static final Integer MOSAIC3p4      = 3;
+    public static final Integer MOSAIC1p7      = 4;
+    public static final Integer MOSAIC1p5      = 5;
+    public static final Integer MOSAIC1p1      = 6;
+    public static final Integer MOSAICPIP1     = 7;
+    public static final Integer MOSAICPIP3     = 8;
+    public static final Integer MOSAIC4x4      = 9;
+    public static final Integer MOSAIC1p4A     = 10;
+    public static final Integer MOSAIC1p2A     = 11;
+    public static final Integer MOSAIC1p2x2A   = 12;
+    public static final Integer MOSAIC1p6A     = 13;
+    public static final Integer MOSAIC1p12     = 14;
+    public static final Integer MOSAIC1p16A    = 15;
+    public static final Integer MOSAIC4x5A     = 16;
+    public static final Integer MOSAIC5x5      = 17;
+    public static final Integer MOSAIC1p1A     = 18;
+    public static final Integer MOSAIC1p2      = 19;
+    public static final Integer MOSAIC1p2x6A   = 20;
+    public static final Integer MOSAIC1p1p2x4A = 21;
+    public static final Integer MOSAIC1p3A     = 22;
 
     /** Creates a new instance of XmlRpcMcuClient */
     public XmlRPCJSR309Client(String  url) throws MalformedURLException
@@ -591,10 +605,10 @@ public class XmlRPCJSR309Client {
         return (Integer)returnVal[0];
     }
 
-    public boolean VideoMixerPortSetCodec(int sessId,int mixerId,int portId,Integer codec,int size,int fps,int bitrate,int intraPeriod) throws XmlRpcException
+    public boolean VideoMixerPortSetCodec(int sessId,int mixerId,int portId,Integer codec,int size,int fps,int bitrate,int intraPeriod,HashMap<String,String> properties) throws XmlRpcException
         {
         //Create request
-        Object[] request = new Object[]{sessId,mixerId,portId,codec,size,fps,bitrate,intraPeriod};
+        Object[] request = new Object[]{sessId,mixerId,portId,codec,size,fps,bitrate,intraPeriod,properties};
         //Execute
         HashMap response = (HashMap) client.execute("VideoMixerPortSetCodec", request);
         //Return
@@ -737,17 +751,17 @@ public class XmlRPCJSR309Client {
     public boolean VideoTranscoderDelete(int sessId,int videoTranscoderId) throws XmlRpcException
     {
         //Create request
-        Object[] request = new Object[]{videoTranscoderId};
+        Object[] request = new Object[]{sessId,videoTranscoderId};
         //Execute
         HashMap response = (HashMap) client.execute("VideoTranscoderDelete", request);
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }
 
-    public boolean VideoTranscoderSetCodec(int sessId,int videoTranscoderId,Integer codec,int size,int fps,int bitrate,int intraPeriod) throws XmlRpcException
+    public boolean VideoTranscoderSetCodec(int sessId,int videoTranscoderId,Integer codec,int size,int fps,int bitrate,int intraPeriod,HashMap<String,String> properties) throws XmlRpcException
     {
         //Create request
-        Object[] request = new Object[]{sessId,videoTranscoderId,codec,size,fps,bitrate,intraPeriod};
+        Object[] request = new Object[]{sessId,videoTranscoderId,codec,size,fps,bitrate,intraPeriod,properties};
         //Execute
         HashMap response = (HashMap) client.execute("VideoTranscoderSetCodec", request);
         //Return
