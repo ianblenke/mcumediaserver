@@ -128,9 +128,10 @@ public class RTPParticipant extends Participant {
     private SipURI proxy;
     private boolean useInfo;
     private boolean useUpdate;
+    private boolean useRTPTimeout;
 
 
-    public static final String ALLOWED = "INVITE, CANCEL, UPDATE, INFO, OPTIONS, BYE";
+    public static final String ALLOWED = "INVITE, ACK, CANCEL, UPDATE, INFO, OPTIONS, BYE";
     private String localFingerprint;
     private String localHash = "SHA-256";
 
@@ -264,6 +265,8 @@ public class RTPParticipant extends Participant {
         //Do no use info or update if not allowed explicitally
         useInfo = false;
         useUpdate = false;
+	//Use RTP timeout by default
+	useRTPTimeout = true;
 	//Do not use DTLS by default
 	useDTLS = false;
         //Create crypto info maps
@@ -374,10 +377,7 @@ public class RTPParticipant extends Participant {
         SipURI us = (SipURI) address.getURI();
         SipURI them = (SipURI) user.getURI();
         //If we have the same username and host/domain
-        if (us.getUser().equals(them.getUser()) && us.getHost().equals(them.getHost()))
-            return true;
-        else
-            return false;
+	return us.getUser().equals(them.getUser()) && us.getHost().equals(them.getHost());
     }
 
     public Integer getRecAudioPort() {
@@ -513,6 +513,14 @@ public class RTPParticipant extends Participant {
         this.rtcpFeedBack = rtcpFeedBack;
     }
 
+    public void setH264profileLevelId(H264ProfileLevelID h264profileLevelId) {
+	this.h264profileLevelId = h264profileLevelId;
+    }
+
+    public void setUseRTPTimeout(boolean useRTPTimeout) {
+	this.useRTPTimeout = useRTPTimeout;
+    }
+
     @Override
     public boolean setVideoProfile(Profile profile) {
         //Check video is supported
@@ -540,7 +548,7 @@ public class RTPParticipant extends Participant {
                 //Create specific codec paraemter
                 HashMap<String,String> params = new HashMap<String, String>();
                 //Check codec
-                if (getVideoCodec()==Codecs.H264)
+                if (Codecs.H264.equals(getVideoCodec()))
                     //Add profile level id
                     params.put("h264.profile-level-id", h264profileLevelId.toString());
                 //Setup video with new profile
@@ -638,7 +646,7 @@ public class RTPParticipant extends Participant {
 
     private Integer findTypeForCodec(HashMap<Integer, Integer> rtpMap, Integer codec) {
         for (Map.Entry<Integer,Integer> pair  : rtpMap.entrySet())
-            if (pair.getValue()==codec)
+            if (pair.getValue().equals(codec))
                 return pair.getKey();
         return -1;
     }
@@ -765,20 +773,20 @@ public class RTPParticipant extends Participant {
             for (Entry<Integer,Integer> mapping : rtpInMap.entrySet())
             {
                 //Check codec
-                if (mapping.getValue()==codec)
+                if (mapping.getValue().equals(codec))
                 {
                     //Get fmt mapping
                     Integer fmt = mapping.getKey();
                     //Append fmt
                     md.addFormat(fmt);
-                    if (codec!=Codecs.OPUS)
+                    if (!Codecs.OPUS.equals(codec))
                         //Add rtmpmap
                         md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec));
                     else
                         //Add rtmpmap
                         md.addRTPMapAttribute(fmt, Codecs.getNameForCodec(mediaName, codec), Codecs.getRateForCodec(mediaName,codec),"2");
                     //Depending on the codec
-                    if (codec==Codecs.H264)
+                    if (Codecs.H264.equals(codec))
                     {
                         //Check if we are offering first
                         if (h264profileLevelId == null)
@@ -792,10 +800,10 @@ public class RTPParticipant extends Participant {
                         else
                             //Add profile id
                             md.addFormatAttribute(fmt,"profile-level-id="+h264profileLevelId);
-                    } else if (codec==Codecs.H263_1996) {
+                    } else if (Codecs.H263_1996.equals(codec)) {
                         //Add h263 supported sizes
                         md.addFormatAttribute(fmt,"CIF=1;QCIF=1");
-                    } else if (codec==Codecs.OPUS) {
+                    } else if (Codecs.OPUS.equals(codec)) {
                         //Create format
                         FormatAttribute fmtp = new FormatAttribute(fmt);
                         //Add parameters
@@ -808,10 +816,10 @@ public class RTPParticipant extends Participant {
                         fmtp.addParameter("stereo",0);
                         //Add opus params support
                         md.addAttribute(fmtp);
-                    } else if (codec==Codecs.ULPFEC) {
+                    } else if (Codecs.ULPFEC.equals(codec)) {
                         //Enable fec
                         rtpMediaProperties.get(mediaName).put("useFEC", "1");
-                    } else if (codec == Codecs.T140RED) {
+                    } else if (Codecs.T140RED.equals(codec)) {
                         //Find t140 codec
                         Integer t140 = findTypeForCodec(rtpInMap,Codecs.T140);
                         //Check that we have founf it
@@ -821,7 +829,7 @@ public class RTPParticipant extends Participant {
                     }
 
                     //Add rtcp-fb fir/pli only for video codecs
-                    if (mediaName.equals("video") && codec!=Codecs.RED  && codec!=Codecs.ULPFEC)
+                    if (mediaName.equals("video") && !Codecs.RED.equals(codec) && !Codecs.ULPFEC.equals(codec))
                     {
                         //Add rtcp-fb nack support
                         md.addAttribute("rtcp-fb", fmt+" nack");
@@ -953,7 +961,7 @@ public class RTPParticipant extends Participant {
             ip = conn.getAddress();
 
         //Check if ip should be nat for this media mixer
-        if (conf.getMixer().isNated(ip))
+            if (conf.getMixer().isNated(ip) || useICE)
             //Do natting
             ip = "0.0.0.0";
         }
@@ -1137,6 +1145,23 @@ public class RTPParticipant extends Participant {
             //No codec priority yet
             Integer priority = Integer.MAX_VALUE;
 
+             //ICE credentials
+            String remoteMediaICEFrag = remoteICEFrag;
+            String remtoeMediaICEPwd = remtoeICEPwd;
+            //Check for global ice credentials
+            ufragAtrr = md.getAttribute("ice-ufrag");
+            pwdAttr = md.getAttribute("ice-pwd");
+
+            //Check if both present
+            if (ufragAtrr!=null && pwdAttr!=null)
+            {
+                //Using ice
+                useICE = true;
+                //Get values
+                remoteMediaICEFrag = ufragAtrr.getValue();
+                remtoeMediaICEPwd = pwdAttr.getValue();
+            }
+
             //By default the media IP is the general IO
             String mediaIp = ip;
 
@@ -1145,8 +1170,8 @@ public class RTPParticipant extends Participant {
             {
                 //Get it
                 mediaIp = c.getAddress();
-                //Check if ip should be nat for this media mixer
-                if (conf.getMixer().isNated(mediaIp))
+                //Check if ip should be nat for this media mixer or we are using ICE
+                if (conf.getMixer().isNated(mediaIp) || useICE)
                     //Do natting
                     mediaIp = "0.0.0.0";
             }
@@ -1246,7 +1271,7 @@ public class RTPParticipant extends Participant {
                 //Get codec for name
                 Integer codec = Codecs.getCodecForName(media,codecName);
                     //if it is h264
-                if (codec==Codecs.H264)
+                    if (Codecs.H264.equals(codec))
                 {
                         int k = -1;
                         //Get ftmp line
@@ -1268,7 +1293,7 @@ public class RTPParticipant extends Participant {
                                 //store new profile value
                                 maxh264profile = profileLevelId;
                                 //Check if it has packetization parameter
-                                if (ftmpLine.indexOf("packetization-mode=1")!=-1)
+                                if (ftmpLine.contains("packetization-mode=1"))
                                     //Set it
                                     h264packetization = 1;
                                 else
@@ -1281,6 +1306,11 @@ public class RTPParticipant extends Participant {
                             //Store this type provisionally
                             h264type = type;
                     }
+                    } else if (Codecs.SPEEX16.equals(codec)  ) {
+			//Check it is 16khz
+			if (rtpMap.getRate()==16000)
+			    //Add it
+			    rtpOutMediaMap.get(media).put(type,codec);
                 } else if (codec!=-1) {
                     //Set codec mapping
                      rtpOutMediaMap.get(media).put(type,codec);
@@ -1300,23 +1330,6 @@ public class RTPParticipant extends Participant {
                 rtpOutMediaMap.get(media).put(h264type,Codecs.H264);
             }
 
-            //ICE credentials
-            String remoteMediaICEFrag = remoteICEFrag;
-            String remtoeMediaICEPwd = remtoeICEPwd;
-            //Check for global ice credentials
-            ufragAtrr = md.getAttribute("ice-ufrag");
-            pwdAttr = md.getAttribute("ice-pwd");
-
-            //Check if both present
-            if (ufragAtrr!=null && pwdAttr!=null)
-            {
-                //Using ice
-                useICE = true;
-                //Get values
-                remoteMediaICEFrag = ufragAtrr.getValue();
-                remtoeMediaICEPwd = pwdAttr.getValue();
-            }
-
             //For each entry
             for (Integer codec : rtpOutMediaMap.get(media).values())
             {
@@ -1329,7 +1342,7 @@ public class RTPParticipant extends Participant {
                     for (int index=0;index<audioCodecs.size();index++)
                     {
                         //Check codec
-                        if (audioCodecs.get(index)==codec)
+                        if (audioCodecs.get(index).equals(codec))
                         {
                             //Check if it is first codec for audio
                             if (priority==Integer.MAX_VALUE)
@@ -1358,7 +1371,7 @@ public class RTPParticipant extends Participant {
                     for (int index=0;index<videoCodecs.size();index++)
                     {
                         //Check codec
-                        if (videoCodecs.get(index)==codec && codec!=Codecs.RED && codec!=Codecs.ULPFEC)
+                        if (videoCodecs.get(index).equals(codec) && !codec.equals(Codecs.RED) && !codec.equals(Codecs.ULPFEC))
                         {
                             //Check if it is first codec for video
                             if (priority==Integer.MAX_VALUE)
@@ -1387,7 +1400,7 @@ public class RTPParticipant extends Participant {
                     for (int index=0;index<textCodecs.size();index++)
                     {
                         //Check codec
-                        if (textCodecs.get(index)==codec)
+                        if (textCodecs.get(index).equals(codec))
                         {
                             //Check if it is first codec for audio
                             if (priority==Integer.MAX_VALUE)
@@ -1659,9 +1672,31 @@ public class RTPParticipant extends Participant {
             }
 
             //Check version
-            if (!sdp.getOrigin().getSessVersion().equals(remoteSDP.getOrigin().getSessVersion()))
-                //Log error but accept
-                Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE,"SDP update not supported yet");
+            if (!timerSupported || !sdp.getOrigin().getSessVersion().equals(remoteSDP.getOrigin().getSessVersion()))
+	    {
+		try {
+		    //Stop sending
+		    stopSending();
+		    //Clean data before processing
+		    rejectedMedias.clear();
+		    //Process nre remote sdp
+		    remoteSDP = processSDP(sdp);
+		    //Start receving again, just in case we added new media
+		    startReceiving();
+		    //Create local SDP
+		    localSDP = createSDP();
+		    //Start sending again
+		    startSending();
+		    //Call listeners
+		    changedMedia();
+		} catch (XmlRpcException ex) {
+		    Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, "excetpion procesing updated SDP", ex);
+		    //Not supported yet
+		    request.createResponse(500, "SDP error "+ex.getMessage()).send();
+		    //Exit
+		    return;
+		}
+	    }
             //Resend sdp
             resp.setContent(localSDP.toString(),"application/sdp");
         }
@@ -1690,6 +1725,9 @@ public class RTPParticipant extends Participant {
 	    resp.addHeader("X-Conference-Mixer-ID", conf.getId().toString());
 	    resp.addHeader("X-Participant-ID", id.toString());
 	    resp.addHeader("X-Participant-Token", getToken());
+	    resp.addHeader("X-Conference-Mixer-PartID", id.toString());
+            //Add alow headers
+            resp.addHeader("Allow",ALLOWED);
             //Check session refresh request
             if (timerSupported && sessionExpires>0)
             {
@@ -1794,6 +1832,9 @@ public class RTPParticipant extends Participant {
 	    inviteRequest.addHeader("X-Conference-Mixer-ID", conf.getId().toString());
 	    inviteRequest.addHeader("X-Participant-ID", id.toString());
 	    inviteRequest.addHeader("X-Participant-Token", getToken());
+	    inviteRequest.addHeader("X-Conference-Mixer-PartID", id.toString());
+            //Add allow header
+            inviteRequest.addHeader("Allow",ALLOWED);
             //Check if we have a proxy
             if (proxy!=null)
                 //Set proxy
@@ -2058,7 +2099,7 @@ public class RTPParticipant extends Participant {
             if (!num.equals(totalPacketCount)) {
                 //Update
                 totalPacketCount = num;
-            }  else {
+		}  else if (useRTPTimeout) {
                 //Terminate
                 doBye(true);
             }
@@ -2122,9 +2163,7 @@ public class RTPParticipant extends Participant {
             SipServletRequest req = session.createRequest("BYE");
             //Send it
             req.send();
-        } catch(IOException ex){
-            Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
-        } catch(IllegalStateException ex){
+        } catch(Exception ex){
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
         }
         try {
@@ -2154,7 +2193,7 @@ public class RTPParticipant extends Participant {
             SipServletResponse resp = request.createResponse(200, "Ok");
             //Send it
             resp.send();
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
         }
         //Set expire time
@@ -2193,7 +2232,7 @@ public class RTPParticipant extends Participant {
 	    stats = client.getParticipantStatistics(conf.getId(), id);
             //Delete participant
             client.DeleteParticipant(conf.getId(), id);
-        } catch (XmlRpcException ex) {
+        } catch (Exception ex) {
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
         }
 
@@ -2272,7 +2311,7 @@ public class RTPParticipant extends Participant {
             //Create specific codec paraemter
             HashMap<String,String> params = new HashMap<String, String>();
             //Check codec
-            if (getVideoCodec()==Codecs.H264)
+            if (Codecs.H264.equals(getVideoCodec()))
                     //Add profile level id
                     params.put("h264.profile-level-id", h264profileLevelId.toString());
             //Set codec
