@@ -28,14 +28,11 @@
                     <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
                 <library dirs="200">
-                    <file>${file.reference.ssa-api.jar}</file>
-                </library>
-                <library dirs="200">
-                    <file>${file.reference.prog-mcu}</file>
-                </library>
-                <library dirs="200">
                     <file>${reference.sdp.jar}</file>
                     <path-in-war>WEB-INF/lib</path-in-war>
+                </library>
+                <library dirs="200">
+                    <file>${file.reference.ssa-api-1.1.jar}</file>
                 </library>
             </web-module-libraries>
             <web-module-additional-libraries/>

@@ -68,6 +68,12 @@ import org.w3c.dom.NodeList;
  */
 public class ConferenceMngr implements Serializable,Conference.Listener,MediaMixer.Listener {
 
+	public void onConferenceRecordingStarted(Conference conf) {
+	}
+
+	public void onConferenceRecordingStopped(Conference conf) {
+	}
+
     public interface Listener {
         void onConferenceCreated(Conference conf);
         void onConferenceDestroyed(String confId);
@@ -591,8 +597,14 @@ public class ConferenceMngr implements Serializable,Conference.Listener,MediaMix
         }
         //Launch event
         fireOnConferenceCreatead(conf);
-        //Init
-        conf.init();
+         try {
+            //Init
+            conf.init();
+        } catch (XmlRpcException ex) {
+            Logger.getLogger(ConferenceMngr.class.getName()).log(Level.SEVERE, null, ex);
+            //Destroy
+            conf.destroy();
+        }
         //Return
         return conf;
     }

@@ -8,7 +8,6 @@ package org.murillo.mcuWeb;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -72,4 +71,10 @@ public class HTTPListener implements Conference.Listener {
 
     public void onOwnerChanged(String confId, Integer partId, Object data, Participant owner) {
     }
+
+	public void onConferenceRecordingStarted(Conference conf) {
+	}
+
+	public void onConferenceRecordingStopped(Conference conf) {
+	}
 }

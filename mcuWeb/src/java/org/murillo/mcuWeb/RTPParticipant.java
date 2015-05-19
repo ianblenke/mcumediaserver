@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -66,6 +67,7 @@ import org.murillo.sdp.FormatAttribute;
 import org.murillo.sdp.MediaDescription;
 import org.murillo.sdp.RTPMapAttribute;
 import org.murillo.sdp.SSRCAttribute;
+import org.murillo.sdp.SSRCGroupAttribute;
 import org.murillo.sdp.SessionDescription;
 import org.murillo.util.H264ProfileLevelID;
 
@@ -94,6 +96,7 @@ public class RTPParticipant extends Participant {
     private Integer textCodec;
     private String location;
     private Integer totalPacketCount;
+    @XmlElement
     private Map<String, MediaStatistics> stats;
 
     private HashMap<String,List<Integer>> supportedCodecs = null;
@@ -129,6 +132,7 @@ public class RTPParticipant extends Participant {
     private boolean useInfo;
     private boolean useUpdate;
     private boolean useRTPTimeout;
+    private boolean useRTX;
 
 
     public static final String ALLOWED = "INVITE, ACK, CANCEL, UPDATE, INFO, OPTIONS, BYE";
@@ -227,9 +231,9 @@ public class RTPParticipant extends Participant {
         }
     }
 
-    RTPParticipant(Integer id,String name,String token,Integer mosaicId,Integer sidebarId,Conference conf) throws XmlRpcException {
+    RTPParticipant(Integer id,Integer partId,String name,String token,Integer mosaicId,Integer sidebarId,Conference conf) throws XmlRpcException {
         //Call parent
-        super(id,name,token,mosaicId,sidebarId,conf,Type.SIP);
+        super(id,partId,name,token,mosaicId,sidebarId,conf,Type.SIP);
         //No sending ports
         sendAudioPort = 0;
         sendVideoPort = 0;
@@ -307,28 +311,64 @@ public class RTPParticipant extends Participant {
 	rtpExtensionMap = new HashMap<String, HashMap<String, Integer>>();
         //Has RTCP feedback
         rtcpFeedBack = false;
+	//Using rtx by default
+	useRTX = true;
 }
 
     @Override
     public void restart(Integer partId) {
 	//Store new id
-	id = partId;
+	this.partId = partId;
         try {
-	    //Get client
-            XmlRpcMcuClient client = conf.getMCUClient();
-            //Create participant in mixer conference and store new id
-            id = client.CreateParticipant(id, name.replace('.', '_'), getToken(), type.valueOf(),mosaicId,sidebarId);
-            //Check state
-            if (state!=State.CREATED)
+	    //Clear ports so we can start receiving again
+	    sendAudioPort = 0;
+	    sendVideoPort = 0;
+	    sendTextPort = 0;
+	    recAudioPort = 0;
+	    recVideoPort = 0;
+	    recTextPort = 0;
+	    //Reset RTP setup
+	    rtpSetups = new HashMap<String,Setup>(3);
+	    //Actpass by default
+	    rtpSetups.put("audio",Setup.ACTPASS);
+	    rtpSetups.put("video",Setup.ACTPASS);
+	    rtpSetups.put("text" ,Setup.ACTPASS);
+	    //Start receiving media
+            startReceiving();
+	    // create an UPDATE
+	    SipServletRequest updateRequest = session.createRequest("UPDATE");
+	    //Check session refresh request
+	    if (timerSupported && sessionExpires>0)
             {
-                //Start sending
-                startSending();
-                //And receiving
-                startReceiving();
+		//RFC 4208 Session Timers
+		//    If the UAS wishes to accept the request, it copies the value of the
+		//    Session-Expires header field from the request into the 2xx response.
+		updateRequest.addHeader("Session-expires", sessionExpires.toString()+";refresher=uac");
+		//Add require and supported
+		updateRequest.addHeader("Supported","timer");
+		updateRequest.addHeader("Require","timer");
             }
-        } catch (XmlRpcException ex) {
-            //End it
-            end();
+	    //add allowed header
+	    updateRequest.addHeader("Allow", ALLOWED);
+	    //Add custom headers with conf id and participant id
+            updateRequest.addHeader("X-Conference-ID", conf.getUID());
+	    updateRequest.addHeader("X-Participant-ID", getId().toString());
+	    updateRequest.addHeader("X-Participant-Token", getToken());
+	    updateRequest.addHeader("X-Conference-Mixer-ID", conf.getId().toString());
+	    updateRequest.addHeader("X-Conference-Mixer-PartID", partId.toString());
+	    
+            //Create sdp
+            localSDP = createSDP();
+            //Convert to
+            String sdp = localSDP.toString();
+            //Attach body
+            updateRequest.setContent(sdp,"application/sdp");
+            //Send it
+            updateRequest.send();
+            //Log
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "doInvite [idSession:{0}]",new Object[]{session.getId()});
+        } catch (Exception ex) {
+	   throw new RuntimeException(ex);
         }
     }
 
@@ -538,7 +578,7 @@ public class RTPParticipant extends Participant {
             if (getSendVideoPort()!=0)
             {
                 //Stop sending video
-                client.StopSending(confId, id, MediaType.VIDEO);
+                client.StopSending(confId, partId, MediaType.VIDEO);
                 //Get profile bitrate
                 int bitrate = profile.getVideoBitrate();
                 //Reduce to the maximum in SDP
@@ -551,10 +591,18 @@ public class RTPParticipant extends Participant {
                 if (Codecs.H264.equals(getVideoCodec()))
                     //Add profile level id
                     params.put("h264.profile-level-id", h264profileLevelId.toString());
+                //FIX: Should not be here
+                if (profile.hasProperty("rateEstimator.minRate"))
+                    //Add it
+                    params.put("rateEstimator.minRate",profile.getProperty("rateEstimator.minRate"));
+                //FIX: Should not be here
+                if (profile.hasProperty("rateEstimator.maxRate"))
+                    //Add it
+                    params.put("rateEstimator.maxRate",profile.getProperty("rateEstimator.maxRate"));
                 //Setup video with new profile
-                client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize(), profile.getVideoFPS(), bitrate,  profile.getIntraPeriod(), params);
+                client.SetVideoCodec(confId, partId, getVideoCodec(), profile.getVideoSize(), profile.getVideoFPS(), bitrate,  profile.getIntraPeriod(), params);
                 //Send video & audio
-                client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
+                client.StartSending(confId, partId, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
             }
         } catch (XmlRpcException ex) {
             Logger.getLogger("global").log(Level.SEVERE, null, ex);
@@ -748,12 +796,18 @@ public class RTPParticipant extends Participant {
         {
             //Create ramdon ssrc
             Long ssrc = Math.round(Math.random()*Integer.MAX_VALUE);
+	    //The retransmission ssrc
+	    Long ssrcRTX = Math.round(Math.random()*Integer.MAX_VALUE);
             //Set cname
             String cname = getId()+"@"+conf.getUID();
             //Label
             String label = conf.getUID();
             //Set app id
             String appId = mediaName.substring(0,1)+"0";
+	    //If using RTX add the group attribute, only for video
+	    if (useRTX && "video".equals(mediaName))
+		    //Add RTX stream as ssrc+1
+		    md.addAttribute(new SSRCGroupAttribute("FID",Arrays.asList(ssrc.toString(),ssrcRTX.toString())));
             //Add ssrc info
             md.addAttribute(new SSRCAttribute(ssrc, "cname"     ,cname));
             md.addAttribute(new SSRCAttribute(ssrc, "mslabel"   ,label));
@@ -762,8 +816,19 @@ public class RTPParticipant extends Participant {
             //Set attributes
             rtpMediaProperties.get(mediaName).put("ssrc", ssrc.toString());
             rtpMediaProperties.get(mediaName).put("cname", cname);
+	    //Add ssrc for RTX, only for video
+	    if (useRTX && "video".equals(mediaName))
+	    {
             //Allow nack
             rtpMediaProperties.get(mediaName).put("useNACK", "1");
+		//Add ssrc info
+		md.addAttribute(new SSRCAttribute(ssrcRTX, "cname"     ,cname));
+		md.addAttribute(new SSRCAttribute(ssrcRTX, "mslabel"   ,label));
+		md.addAttribute(new SSRCAttribute(ssrcRTX, "msid"      ,label+" " + appId));
+		md.addAttribute(new SSRCAttribute(ssrcRTX, "label"     ,label+appId));
+		//Set attributes
+		rtpMediaProperties.get(mediaName).put("ssrcRTX", ssrcRTX.toString());
+        }
         }
 
         //Add rtmpmap for each codec in supported order
@@ -792,14 +857,38 @@ public class RTPParticipant extends Participant {
                         if (h264profileLevelId == null)
                             //Set default profile
                             h264profileLevelId = new H264ProfileLevelID(h264profileLevelIdDefault);
+			//Create format
+                        FormatAttribute fmtp = new FormatAttribute(fmt);
+			//Set profile-level-id
+			fmtp.addParameter("profile-level-id",h264profileLevelId.toString());
 
                         //Check packetization mode
                         if (h264packetization>0)
                             //Add profile and packetization mode
-                            md.addFormatAttribute(fmt,"profile-level-id="+h264profileLevelId+";packetization-mode="+h264packetization);
-                        else
-                            //Add profile id
-                            md.addFormatAttribute(fmt,"profile-level-id="+h264profileLevelId);
+                           fmtp.addParameter("packetization-mode=",h264packetization);
+
+			//Add max mbps
+			if (profile.hasProperty("codecs.h264.max-mbps"))
+			    //Add param
+			    fmtp.addParameter("max-mbps", profile.getIntProperty("codecs.h264.max-mbps",40500));
+			//Add max fs
+			if (profile.hasProperty("codecs.h264.max-fs"))
+			    //Add param
+			    fmtp.addParameter("max-fs", profile.getIntProperty("codecs.h264.max-fs",1344));
+			//Add max br
+			if (profile.hasProperty("codecs.h264.max-br"))
+			    //Add param
+			    fmtp.addParameter("max-br", profile.getIntProperty("codecs.h264.max-br",906));
+			//Add max smbps
+			if (profile.hasProperty("codecs.h264.max-smbps"))
+			    //Add param
+			    fmtp.addParameter("max-smbps", profile.getIntProperty("codecs.h264.max-smbps",40500));
+			//Add max fps
+			if (profile.hasProperty("codecs.h264.max-fps"))
+			    //Add param
+			    fmtp.addParameter("max-fps", profile.getIntProperty("codecs.h264.max-fps",3000));
+			//Add h264 params support
+			md.addAttribute(fmtp);
                     } else if (Codecs.H263_1996.equals(codec)) {
                         //Add h263 supported sizes
                         md.addFormatAttribute(fmt,"CIF=1;QCIF=1");
@@ -819,6 +908,13 @@ public class RTPParticipant extends Participant {
                     } else if (Codecs.ULPFEC.equals(codec)) {
                         //Enable fec
                         rtpMediaProperties.get(mediaName).put("useFEC", "1");
+		    } else if (Codecs.RTX.equals(codec)) {
+                        //Find VP8 codec
+                        Integer vp8 = findTypeForCodec(rtpInMap,Codecs.VP8);
+                        //Check that we have founf it
+                        if (vp8>0)
+                            //Add redundancy fmt
+                            md.addFormatAttribute(fmt,"apt="+vp8);
                     } else if (Codecs.T140RED.equals(codec)) {
                         //Find t140 codec
                         Integer t140 = findTypeForCodec(rtpInMap,Codecs.T140);
@@ -829,10 +925,10 @@ public class RTPParticipant extends Participant {
                     }
 
                     //Add rtcp-fb fir/pli only for video codecs
-                    if (mediaName.equals("video") && !Codecs.RED.equals(codec) && !Codecs.ULPFEC.equals(codec))
+                    if (mediaName.equals("video") && !Codecs.RED.equals(codec) && !Codecs.ULPFEC.equals(codec) && !Codecs.RTX.equals(codec))
                     {
                         //Add rtcp-fb nack support
-                        md.addAttribute("rtcp-fb", fmt+" nack");
+                        md.addAttribute("rtcp-fb", fmt+" nack pli");
                         //Add fir
                         md.addAttribute("rtcp-fb", fmt+" ccm fir");
                         //Add Remb
@@ -880,6 +976,11 @@ public class RTPParticipant extends Participant {
         //Depending on the type
         if (type.equalsIgnoreCase("application/sdp"))
         {
+	    	//Check object type
+	    	if (content instanceof String)
+				//Get content
+				sdp = (String) content;
+	    	else
             //Get it
             sdp = new String((byte[])content);
         } else if (type.startsWith("multipart/mixed")) {
@@ -971,6 +1072,11 @@ public class RTPParticipant extends Participant {
         videoSupported = false;
         textSupported = false;
 
+	//No sending ports
+        sendAudioPort = 0;
+        sendVideoPort = 0;
+        sendTextPort = 0;
+
         //NO bitrate by default
         videoBitrate = 0;
 
@@ -1037,8 +1143,8 @@ public class RTPParticipant extends Participant {
             //Get transport
             ArrayList<String> proto = md.getProto();
 
-            //If it its not RTP (i.e. RTP/(s)AVP(f) or UDP/TLS/RTP/SAVP(f)
-            if (!proto.get(proto.size()-2).equals("RTP"))
+            //If it its not RTP (i.e. RTP/(s)AVP(f) or UDP/TLS/RTP/SAVP(f) or port is 0
+            if (!proto.get(proto.size()-2).equals("RTP") || port==0)
             {
                 //Create media descriptor
                 MediaDescription rejected = new MediaDescription(media,0,md.getProtoString());
@@ -1275,16 +1381,12 @@ public class RTPParticipant extends Participant {
                 {
                         int k = -1;
                         //Get ftmp line
-                        String ftmpLine = md.getFormatParameters(type);
-                        //Check if got format
-                        if (ftmpLine!=null)
-                            //Find profile
-                        k = ftmpLine.indexOf("profile-level-id=");
-                        //Check it
-                        if (k!=-1)
+                        Map<String,String> params = md.getFormatParameters(type);
+                        //Check if it has it
+                        if (params.containsKey("profile-level-id"))
                         {
                             //Get profile level indication
-                            H264ProfileLevelID profileLevelId = new H264ProfileLevelID(ftmpLine.substring(k+17,k+23));
+                            H264ProfileLevelID profileLevelId = new H264ProfileLevelID(params.get("profile-level-id"));
                             //Convert and compare
                             if (profileLevelId.getProfile()<=Codecs.MaxH264SupportedProfile && (maxh264profile==null || profileLevelId.getProfile()>maxh264profile.getProfile()) )
                             {
@@ -1293,12 +1395,9 @@ public class RTPParticipant extends Participant {
                                 //store new profile value
                                 maxh264profile = profileLevelId;
                                 //Check if it has packetization parameter
-                                if (ftmpLine.contains("packetization-mode=1"))
+                                if (params.containsKey("packetization-mode"))
                                     //Set it
-                                    h264packetization = 1;
-                                else
-                                    //Unset it
-                                    h264packetization = 0;
+					h264packetization = Integer.parseInt(params.get("packetization-mode"));
                             }
                     } else {
                         //check if no profile has been received so far
@@ -1331,8 +1430,11 @@ public class RTPParticipant extends Participant {
             }
 
             //For each entry
-            for (Integer codec : rtpOutMediaMap.get(media).values())
+            for (Map.Entry<Integer,Integer> entry : rtpOutMediaMap.get(media).entrySet())
             {
+		//Get Codec and type
+		Integer type = entry.getKey();
+		Integer codec = entry.getValue();
                 //Check the media type
                 if (media.equals("audio"))
                 {
@@ -1365,13 +1467,29 @@ public class RTPParticipant extends Participant {
                 }
                 else if (media.equals("video"))
                 {
+		    //We are using rtx
+		    if (codec.equals(Codecs.RTX))
+		    {
+			    //Get format
+			    Map<String,String> fp = md.getFormatParameters(type);
+			    //Get associated payload type
+			    if (fp.containsKey("apt"))
+			    {
+				    //Enable rtx, it must have apt
+				    useRTX = true;
+				    //Set it
+				    rtpMediaProperties.get(media).put("useRTX", "1");
+				    //Set PT
+				    rtpMediaProperties.get(media).put("rtx.apt", fp.get("apt"));
+			    }
+		    }
                     //Get suppoorted codec for media
                     List<Integer> videoCodecs = supportedCodecs.get("video");
                     //Get index
                     for (int index=0;index<videoCodecs.size();index++)
                     {
                         //Check codec
-                        if (videoCodecs.get(index).equals(codec) && !codec.equals(Codecs.RED) && !codec.equals(Codecs.ULPFEC))
+                        if (videoCodecs.get(index).equals(codec) && !codec.equals(Codecs.RED) && !codec.equals(Codecs.ULPFEC) && !codec.equals(Codecs.RTX))
                         {
                             //Check if it is first codec for video
                             if (priority==Integer.MAX_VALUE)
@@ -1575,15 +1693,33 @@ public class RTPParticipant extends Participant {
         }
         //Store address
         address = inviteRequest.getFrom();
+        //Get uri
+        SipURI uri = (SipURI)address.getURI();
+        //Get Pin
+        pin = uri.getUserPassword();
+        //Remove it from uri
+        uri.setUserPassword(null);
         //Get call id
         setSessionId(inviteRequest.getCallId());
+	//Get call info
+	ListIterator<String> iterator = inviteRequest.getHeaders("Call-Info");
+	//Append each value
+	while (iterator.hasNext())
+	{
+		//Get next
+		String callInfo = iterator.next();
+		//Strip < and >
+		if (callInfo.startsWith("<"))
+			callInfo = callInfo.substring(1);
+		if (callInfo.endsWith(">"))
+			callInfo = callInfo.substring(0,callInfo.length()-1);
+		//Append to info
+		info.add(callInfo);
+	}
         //Create ringing
         SipServletResponse resp = inviteRequest.createResponse(180, "Ringing");
         //Send it
         resp.send();
-        //Set state
-        setState(State.WAITING_ACCEPT);
-        //Check cdr
         //Get sip session
         session = inviteRequest.getSession();
         //Get sip application session
@@ -1600,6 +1736,8 @@ public class RTPParticipant extends Participant {
         if (inviteRequest.getContentLength()>0)
             //Process it
             proccesContent(inviteRequest.getContentType(),inviteRequest.getContent());
+        //Set state
+        setState(State.WAITING_ACCEPT);
         //Check if we need to autoaccapt
         if (isAutoAccept())
             //Accept it
@@ -1652,8 +1790,17 @@ public class RTPParticipant extends Participant {
         }
         //add allowed header
         resp.addHeader("Allow", ALLOWED);
+        //Body
+        String body = null;
         //Get content
-        byte[] body = (byte[])request.getContent();
+        Object content = request.getContent();
+        //Check object type
+        if (content instanceof String)
+	    //Get content
+	    body = (String)content;
+        else
+	    //Get it
+	    body = new String((byte[])content);
         //Check body and type
         if (body!=null && request.getContentType().equalsIgnoreCase("application/sdp"))
         {
@@ -1661,7 +1808,7 @@ public class RTPParticipant extends Participant {
 
             try {
                 //Parse conent
-                sdp = SessionDescription.Parse(new String(body));
+                sdp = SessionDescription.Parse(body);
             } catch (ParserException ex) {
                 //Log
                 Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
@@ -1685,6 +1832,8 @@ public class RTPParticipant extends Participant {
 		    startReceiving();
 		    //Create local SDP
 		    localSDP = createSDP();
+                    //Negotiation done
+                    onSDPNegotiationDone();
 		    //Start sending again
 		    startSending();
 		    //Call listeners
@@ -1710,7 +1859,7 @@ public class RTPParticipant extends Participant {
         if (state!=State.WAITING_ACCEPT)
         {
             //LOG
-            Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "Accepted participant is not in WAITING_ACCEPT state  [id:{0},state:{1}].", new Object[]{id,state});
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "Accepted participant is not in WAITING_ACCEPT state  [id:{0},state:{1}].", new Object[]{getId(),state});
             //Error
             return false;
         }
@@ -1722,10 +1871,10 @@ public class RTPParticipant extends Participant {
             SipServletResponse resp = inviteRequest.createResponse(200, "Ok");
             //Add custom headers with conf id and participant id
             resp.addHeader("X-Conference-ID", conf.getUID());
-	    resp.addHeader("X-Conference-Mixer-ID", conf.getId().toString());
-	    resp.addHeader("X-Participant-ID", id.toString());
+	    resp.addHeader("X-Participant-ID", getId().toString());
 	    resp.addHeader("X-Participant-Token", getToken());
-	    resp.addHeader("X-Conference-Mixer-PartID", id.toString());
+	    resp.addHeader("X-Conference-Mixer-ID", conf.getId().toString());
+	    resp.addHeader("X-Conference-Mixer-PartID", partId.toString());
             //Add alow headers
             resp.addHeader("Allow",ALLOWED);
             //Check session refresh request
@@ -1753,12 +1902,12 @@ public class RTPParticipant extends Participant {
             resp.send();
         } catch (Exception ex) {
             try {
+		//Log
+                Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
                 //Create final response
                 SipServletResponse resp = inviteRequest.createResponse(500, ex.getMessage());
                 //Send it
                 resp.send();
-                //Log
-                Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
             } catch (IOException ex1) {
                 //Log
                 Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex1);
@@ -1778,7 +1927,7 @@ public class RTPParticipant extends Participant {
         if (state!=State.WAITING_ACCEPT)
         {
             //LOG
-            Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "Rejected participant is not in WAITING_ACCEPT state [id:{0},state:{1}].", new Object[]{id,state});
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "Rejected participant is not in WAITING_ACCEPT state [id:{0},state:{1}].", new Object[]{getId(),state});
             //Error
             return false;
         }
@@ -1829,10 +1978,10 @@ public class RTPParticipant extends Participant {
             inviteRequest = sf.createRequest(appSession, "INVITE", from, to);
             //Add custom headers with conf id and participant id
             inviteRequest.addHeader("X-Conference-ID", conf.getUID());
-	    inviteRequest.addHeader("X-Conference-Mixer-ID", conf.getId().toString());
-	    inviteRequest.addHeader("X-Participant-ID", id.toString());
+	    inviteRequest.addHeader("X-Participant-ID", getId().toString());
 	    inviteRequest.addHeader("X-Participant-Token", getToken());
-	    inviteRequest.addHeader("X-Conference-Mixer-PartID", id.toString());
+	    inviteRequest.addHeader("X-Conference-Mixer-PartID", partId.toString());
+	    inviteRequest.addHeader("X-Conference-Mixer-ID", conf.getId().toString());
             //Add allow header
             inviteRequest.addHeader("Allow",ALLOWED);
             //Check if we have a proxy
@@ -1921,7 +2070,7 @@ public class RTPParticipant extends Participant {
         if (state!=State.CONNECTING)
         {
             //Log
-            Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "onInviteResponse while not CONNECTING [id:{0},state:{1}]",new Object[]{id,state});
+            Logger.getLogger(RTPParticipant.class.getName()).log(Level.WARNING, "onInviteResponse while not CONNECTING [id:{0},state:{1}]",new Object[]{getId(),state});
             //Exit
             return;
         }
@@ -1984,9 +2133,50 @@ public class RTPParticipant extends Participant {
             session.setInvalidateWhenReady(false);
             //Update name
             address = resp.getTo();
+	    //Get uir
+	    SipURI uri = (SipURI)address.getURI();
+	    //Get name
+	    name = address.getDisplayName();
+	    //If empty
+	    if (name==null || name.isEmpty() || name.equalsIgnoreCase("anonymous"))
+	       //Set to user
+	       name = uri.getUser();
+	    //If still empty
+	    if (name==null)
+	       //use host part
+	       name = uri.getHost();
+	    
+		//Get call info
+		ListIterator<String> iterator = inviteRequest.getHeaders("Call-Info");
+		//Append each value
+		while (iterator.hasNext())
+		{
+			//Get next
+			String callInfo = iterator.next();
+			//Strip < and >
+			if (callInfo.startsWith("<"))
+				callInfo = callInfo.substring(1);
+			if (callInfo.endsWith(">"))
+				callInfo = callInfo.substring(0,callInfo.length()-1);
+			//Append to info
+			info.add(callInfo);
+
+		}
+		
             try {
+		//Body
+		String body = null;
+		//Get content
+		Object content = resp.getContent();
+		//Check object type
+		if (content instanceof String)
+		    //Get content
+		    body = (String)content;
+		else
+		    //Get it
+		    body = new String((byte[])content);
                 //Parse sdp
-                remoteSDP = processSDP(new String((byte[])resp.getContent()));
+                remoteSDP = processSDP(body);
                 //Check if also have local SDP
                 if (localSDP!=null)
                     //Negotiation done
@@ -2068,7 +2258,7 @@ public class RTPParticipant extends Participant {
     }
 
     public void onTimeout() {
-        Logger.getLogger(RTPParticipant.class.getName()).log(Level.INFO, "onTimeout partId={0} state {1} totalPacketCount={2}", new Object[]{id,state,totalPacketCount});
+        Logger.getLogger(RTPParticipant.class.getName()).log(Level.INFO, "onTimeout partId={0} state {1} totalPacketCount={2}", new Object[]{getId(),state,totalPacketCount});
         //Check state
         if (state==State.CONNECTED) {
             //Extend session 1 minutes
@@ -2087,10 +2277,16 @@ public class RTPParticipant extends Participant {
                     return;
                 }
             }
+            
+            try {
+		//Get client
+		XmlRpcMcuClient client = conf.getMCUClient();
             //Get statiscits
-            stats = conf.getParticipantStats(id);
+		stats =  client.getParticipantStatistics(conf.getId(), partId);
             //Calculate acumulated packets
             Integer num = 0;
+		//Check we found it
+		if (stats!=null)
             //For each media
             for (MediaStatistics s : stats.values())
                 //Increase packet count
@@ -2103,6 +2299,10 @@ public class RTPParticipant extends Participant {
                 //Terminate
                 doBye(true);
             }
+	    } catch (XmlRpcException ex) {
+	        Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            
         } else if (state==State.CONNECTING) {
             //Cancel request
             doCancel(true);
@@ -2121,6 +2321,23 @@ public class RTPParticipant extends Participant {
 	    //If it is not n ACK for a reInvite
 	    if (state!=State.CONNECTED)
 	    {
+		//Get call info
+		ListIterator<String> iterator = inviteRequest.getHeaders("Call-Info");
+		//Append each value
+		while (iterator.hasNext())
+		{
+			//Get next
+			String callInfo = iterator.next();
+			//Strip < and >
+			if (callInfo.startsWith("<"))
+				callInfo = callInfo.substring(1);
+			if (callInfo.endsWith(">"))
+				callInfo = callInfo.substring(0,callInfo.length()-1);
+			//Check we are not duplicating items
+			if (!info.contains(callInfo))
+				//Append to info
+				info.add(callInfo);
+		}
             //Set state before joining
             setState(State.CONNECTED);
             //Join it to the conference
@@ -2207,7 +2424,7 @@ public class RTPParticipant extends Participant {
     @Override
     public void end() {
         //Log
-        Logger.getLogger(RTPParticipant.class.getName()).log(Level.INFO, "Ending RTP user id:{0} in state {1}", new Object[]{id,state});
+        Logger.getLogger(RTPParticipant.class.getName()).log(Level.INFO, "Ending RTP user id:{0} in state {1}", new Object[]{getId(),state});
         //Depending on the state
         switch (state)
         {
@@ -2229,9 +2446,14 @@ public class RTPParticipant extends Participant {
             //Get client
             XmlRpcMcuClient client = conf.getMCUClient();
 	    //Update stats
-	    stats = client.getParticipantStatistics(conf.getId(), id);
+	    Map<String, MediaStatistics> updated = client.getParticipantStatistics(conf.getId(), partId);
+	    //If no error
+	    if (updated!=null)
+		    //Update latest ones
+		    stats = updated;
+	
             //Delete participant
-            client.DeleteParticipant(conf.getId(), id);
+            client.DeleteParticipant(conf.getId(), partId);
         } catch (Exception ex) {
             Logger.getLogger(RTPParticipant.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -2271,17 +2493,17 @@ public class RTPParticipant extends Participant {
         //Check audio
         if (getSendAudioPort()!=0 && rtpDirections.get("audio").isReceving())
             //Stop sending
-            client.StopSending(confId, id, MediaType.AUDIO);
+            client.StopSending(confId, partId, MediaType.AUDIO);
 
         //Check video
         if (getSendVideoPort()!=0 && rtpDirections.get("video").isReceving())
 	    //Stop sending
-            client.StopSending(confId, id, MediaType.VIDEO);
+            client.StopSending(confId, partId, MediaType.VIDEO);
 
         //Check text
         if (getSendTextPort()!=0 && rtpDirections.get("text").isReceving())
 	    //Stop sending
-            client.StopSending(confId, id, MediaType.TEXT);
+            client.StopSending(confId, partId, MediaType.TEXT);
     }
 
     public void startSending() throws XmlRpcException {
@@ -2294,9 +2516,9 @@ public class RTPParticipant extends Participant {
         if (getSendAudioPort()!=0 && rtpDirections.get("audio").isReceving())
         {
             //Set codec
-            client.SetAudioCodec(confId, id, getAudioCodec());
+            client.SetAudioCodec(confId, partId, getAudioCodec());
             //Send
-            client.StartSending(confId, id, MediaType.AUDIO, getSendAudioIp(), getSendAudioPort(), getRtpOutMediaMap("audio"));
+            client.StartSending(confId, partId, MediaType.AUDIO, getSendAudioIp(), getSendAudioPort(), getRtpOutMediaMap("audio"));
         }
 
         //Check video
@@ -2315,18 +2537,18 @@ public class RTPParticipant extends Participant {
                     //Add profile level id
                     params.put("h264.profile-level-id", h264profileLevelId.toString());
             //Set codec
-            client.SetVideoCodec(confId, id, getVideoCodec(), profile.getVideoSize() , profile.getVideoFPS(), bitrate,profile.getIntraPeriod(),params);
+            client.SetVideoCodec(confId, partId, getVideoCodec(), profile.getVideoSize() , profile.getVideoFPS(), bitrate,profile.getIntraPeriod(),params);
             //Send
-            client.StartSending(confId, id, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
+            client.StartSending(confId, partId, MediaType.VIDEO, getSendVideoIp(), getSendVideoPort(), getRtpOutMediaMap("video"));
         }
 
         //Check text
         if (getSendTextPort()!=0 && rtpDirections.get("text").isReceving())
         {
             //Set codec
-            client.SetTextCodec(confId, id, getTextCodec());
+            client.SetTextCodec(confId, partId, getTextCodec());
             //Send
-            client.StartSending(confId, id, MediaType.TEXT, getSendTextIp(), getSendTextPort(), getRtpOutMediaMap("text"));
+            client.StartSending(confId, partId, MediaType.TEXT, getSendTextIp(), getSendTextPort(), getRtpOutMediaMap("text"));
         }
     }
 
@@ -2341,9 +2563,12 @@ public class RTPParticipant extends Participant {
 	    //Get fingerprint
 	    localFingerprint = client.GetLocalCryptoDTLSFingerprint(localHash);
 
-        //If supported and not already receiving
-        if (getAudioSupported() && recAudioPort==0)
+        //If supported
+        if (getAudioSupported())
         {
+		//If not already receiving
+		if (recAudioPort==0)
+		{
             //Create rtp map for audio
             createRTPMap("audio");
 
@@ -2362,17 +2587,26 @@ public class RTPParticipant extends Participant {
                 //Create new ICE Info
                 ICEInfo info = ICEInfo.Generate();
                 //Set them
-                client.SetLocalSTUNCredentials(confId, id, MediaType.AUDIO, info.ufrag, info.pwd);
+			    client.SetLocalSTUNCredentials(confId, partId, MediaType.AUDIO, info.ufrag, info.pwd);
                 //Add to local info
                 localICEInfo.put("audio", info);
             }
             //Get receiving ports
-            recAudioPort = client.StartReceiving(confId, id, MediaType.AUDIO, getRtpInMediaMap("audio"));
+			recAudioPort = client.StartReceiving(confId, partId, MediaType.AUDIO, getRtpInMediaMap("audio"));
         }
+        } else if (recAudioPort>0) {
+		//Stop it
+		if (client.StopReceiving(confId, partId, MediaType.AUDIO))
+			//Disable port
+			recAudioPort = 0;
+	}
 
         //If supported
-        if (getVideoSupported() && recVideoPort==0)
+        if (getVideoSupported())
         {
+		//If not already receiving
+		if (recVideoPort==0)
+		{
             //Create rtp map for video
             createRTPMap("video");
 
@@ -2391,17 +2625,26 @@ public class RTPParticipant extends Participant {
                 //Create new ICE Info
                 ICEInfo info = ICEInfo.Generate();
                 //Set them
-                client.SetLocalSTUNCredentials(confId, id, MediaType.VIDEO, info.ufrag, info.pwd);
+			    client.SetLocalSTUNCredentials(confId, partId, MediaType.VIDEO, info.ufrag, info.pwd);
                 //Add to local info
                 localICEInfo.put("video", info);
             }
             //Get receiving ports
-            recVideoPort = client.StartReceiving(confId, id, MediaType.VIDEO, getRtpInMediaMap("video"));
+			recVideoPort = client.StartReceiving(confId, partId, MediaType.VIDEO, getRtpInMediaMap("video"));
         }
+        } else if (recVideoPort>0) {
+		//Stop it
+		if (client.StopReceiving(confId, partId, MediaType.VIDEO))
+			//Disable port
+			recVideoPort = 0;
+	}
 
         //If supported
-        if (getTextSupported() && recTextPort==0)
+        if (getTextSupported())
         {
+		//If not already receiving
+		if (recTextPort==0)
+		{
             //Create rtp map for text
             createRTPMap("text");
 
@@ -2420,13 +2663,19 @@ public class RTPParticipant extends Participant {
                 //Create new ICE Info
                 ICEInfo info = ICEInfo.Generate();
                 //Set them
-                client.SetLocalSTUNCredentials(confId, id, MediaType.TEXT, info.ufrag, info.pwd);
+			    client.SetLocalSTUNCredentials(confId, partId, MediaType.TEXT, info.ufrag, info.pwd);
                 //Add to local info
                 localICEInfo.put("text", info);
             }
             //Get receiving ports
-            recTextPort = client.StartReceiving(confId, id, MediaType.TEXT, getRtpInMediaMap("text"));
+			recTextPort = client.StartReceiving(confId, partId, MediaType.TEXT, getRtpInMediaMap("text"));
         }
+        } else if (recTextPort>0) {
+		//Stop it
+		if (client.StopReceiving(confId, partId, MediaType.TEXT))
+			//Disable port
+			recTextPort = 0;
+	}
 
         //And ip
         setRecIp(conf.getRTPIp());
@@ -2439,7 +2688,7 @@ public class RTPParticipant extends Participant {
         Integer confId = conf.getId();
         try {
             //Send fast pcture update
-            client.SendFPU(confId, id);
+            client.SendFPU(confId, partId);
         } catch (XmlRpcException ex) {
             Logger.getLogger(Conference.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -2486,21 +2735,21 @@ public class RTPParticipant extends Participant {
 		//If present
 		if (info!=null)
 		    //Set it
-		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.AUDIO, info.getSetup(), info.getHash(), info.getFingerprint());
+		    client.SetRemoteCryptoDTLS(confId, partId,  MediaType.AUDIO, info.getSetup(), info.getHash(), info.getFingerprint());
 	    } else {
 		//Get local crypto info
 		CryptoInfo local = localCryptoInfo.get("audio");
 		//If present
 		if (local!=null)
 		    //Set it
-		    client.SetLocalCryptoSDES(confId, id, MediaType.AUDIO, local.suite, local.key);
+		    client.SetLocalCryptoSDES(confId, partId, MediaType.AUDIO, local.suite, local.key);
 
 		//Get cryto info
 		CryptoInfo remote = remoteCryptoInfo.get("audio");
             //If present
 		if (remote!=null)
                 //Set it
-	           client.SetRemoteCryptoSDES(confId, id, MediaType.AUDIO, remote.suite, remote.key);
+	           client.SetRemoteCryptoSDES(confId, partId, MediaType.AUDIO, remote.suite, remote.key);
 	    }
 
             //Get ice info
@@ -2508,9 +2757,9 @@ public class RTPParticipant extends Participant {
             //If present
             if (ice!=null)
                 //Set it
-               client.SetRemoteSTUNCredentials(confId, id, MediaType.AUDIO, ice.ufrag, ice.pwd);
+               client.SetRemoteSTUNCredentials(confId, partId, MediaType.AUDIO, ice.ufrag, ice.pwd);
             //Set RTP properties
-            client.SetRTPProperties(confId, id, MediaType.AUDIO, rtpMediaProperties.get("audio"));
+            client.SetRTPProperties(confId, partId, MediaType.AUDIO, rtpMediaProperties.get("audio"));
         }
 
         //If supported
@@ -2524,21 +2773,21 @@ public class RTPParticipant extends Participant {
 		//If present
 		if (info!=null)
 		    //Set it
-		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.VIDEO, info.getSetup(), info.getHash(), info.getFingerprint());
+		    client.SetRemoteCryptoDTLS(confId, partId,  MediaType.VIDEO, info.getSetup(), info.getHash(), info.getFingerprint());
 	    } else {
 		//Get local crypto info
 		CryptoInfo local = localCryptoInfo.get("video");
 		//If present
 		if (local!=null)
 		    //Set it
-		    client.SetLocalCryptoSDES(confId, id, MediaType.VIDEO, local.suite, local.key);
+		    client.SetLocalCryptoSDES(confId, partId, MediaType.VIDEO, local.suite, local.key);
 
 		//Get cryto info
 		CryptoInfo remote = remoteCryptoInfo.get("video");
             //If present
 		if (remote!=null)
                 //Set it
-	           client.SetRemoteCryptoSDES(confId, id, MediaType.VIDEO, remote.suite, remote.key);
+	           client.SetRemoteCryptoSDES(confId, partId, MediaType.VIDEO, remote.suite, remote.key);
 	    }
 
                         //Get ice info
@@ -2546,9 +2795,9 @@ public class RTPParticipant extends Participant {
             //If present
             if (ice!=null)
                 //Set it
-               client.SetRemoteSTUNCredentials(confId, id, MediaType.VIDEO, ice.ufrag, ice.pwd);
+               client.SetRemoteSTUNCredentials(confId, partId, MediaType.VIDEO, ice.ufrag, ice.pwd);
             //Set RTP properties
-            client.SetRTPProperties(confId, id, MediaType.VIDEO, rtpMediaProperties.get("video"));
+            client.SetRTPProperties(confId, partId, MediaType.VIDEO, rtpMediaProperties.get("video"));
         }
 
         //If supported
@@ -2562,30 +2811,30 @@ public class RTPParticipant extends Participant {
 		//If present
 		if (info!=null)
 		    //Set it
-		    client.SetRemoteCryptoDTLS(confId, id,  MediaType.TEXT, info.getSetup(), info.getHash(), info.getFingerprint());
+		    client.SetRemoteCryptoDTLS(confId, partId,  MediaType.TEXT, info.getSetup(), info.getHash(), info.getFingerprint());
 	    } else {
 		//Get local crypto info
 		CryptoInfo local = localCryptoInfo.get("text");
 		//If present
 		if (local!=null)
 		    //Set it
-		    client.SetLocalCryptoSDES(confId, id, MediaType.TEXT, local.suite, local.key);
+		    client.SetLocalCryptoSDES(confId, partId, MediaType.TEXT, local.suite, local.key);
 
 		//Get cryto info
 		CryptoInfo remote = remoteCryptoInfo.get("text");
             //If present
 		if (remote!=null)
                 //Set it
-	           client.SetRemoteCryptoSDES(confId, id, MediaType.TEXT, remote.suite, remote.key);
+	           client.SetRemoteCryptoSDES(confId, partId, MediaType.TEXT, remote.suite, remote.key);
 	    }
             //Get ice info
             ICEInfo ice = remoteICEInfo.get("text");
             //If present
             if (ice!=null)
                 //Set it
-               client.SetRemoteSTUNCredentials(confId, id, MediaType.TEXT, ice.ufrag, ice.pwd);
+               client.SetRemoteSTUNCredentials(confId, partId, MediaType.TEXT, ice.ufrag, ice.pwd);
             //Set RTP properties
-            client.SetRTPProperties(confId, id, MediaType.TEXT, rtpMediaProperties.get("text"));
+            client.SetRTPProperties(confId, partId, MediaType.TEXT, rtpMediaProperties.get("text"));
         }
     }
 }

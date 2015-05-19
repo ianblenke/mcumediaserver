@@ -20,7 +20,9 @@
 package org.murillo.mcuWeb;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.xml.bind.annotation.XmlAccessType;
@@ -40,6 +42,8 @@ import org.murillo.MediaServer.XmlRpcMcuClient;
 public abstract class Participant  implements Serializable {
     @XmlElement
     protected Integer id;
+    @XmlElement(name="userId") //NOTE: This is so it does not get confued with the events.partId that maps to the id eleement
+    protected Integer partId;
     @XmlElement
     protected String sessionId;
     @XmlElement
@@ -70,6 +74,10 @@ public abstract class Participant  implements Serializable {
     protected Object data;
     @XmlElement
     protected Boolean isOwner;
+    @XmlElement
+    protected List<String> info;
+    //NOT PUBLIC!!!
+    protected String pin;
 
     protected HashSet<Listener> listeners = null;
     protected Conference conf = null;
@@ -108,9 +116,10 @@ public abstract class Participant  implements Serializable {
         //Default constructor for Xml Serialization
     }
 
-    Participant(Integer id,String name,String token,Integer mosaicId,Integer sidebarId,Conference conf,Type type) {
+    Participant(Integer id,Integer partId,String name,String token,Integer mosaicId,Integer sidebarId,Conference conf,Type type) {
         //Save values
         this.id = id;
+        this.partId = partId;
         this.conf = conf;
         this.type = type;
         this.name = name;
@@ -127,8 +136,12 @@ public abstract class Participant  implements Serializable {
         this.audioSupported = true;
         this.videoSupported = true;
         this.textSupported = true;
+	//No conference owner by default
+	isOwner = false;
         //Autoaccept by default
         autoAccept = false;
+	//Create participant info list
+	info = new ArrayList<String>();
         //Create listeners
         listeners = new HashSet<Listener>();
         //Initial state
@@ -149,6 +162,10 @@ public abstract class Participant  implements Serializable {
 
     public Integer getId() {
         return id;
+    }
+
+    public Integer getPartId() {
+        return partId;
     }
 
     public Object getData() {
@@ -274,7 +291,7 @@ public abstract class Participant  implements Serializable {
             //Get client
             XmlRpcMcuClient client = conf.getMCUClient();
             //Delete participant
-            client.SetMute(conf.getId(), id, MediaType.AUDIO, flag);
+            client.SetMute(conf.getId(), partId, MediaType.AUDIO, flag);
             //Set audio muted
             audioMuted = flag;
 	    //Launch event
@@ -289,7 +306,7 @@ public abstract class Participant  implements Serializable {
             //Get client
             XmlRpcMcuClient client = conf.getMCUClient();
             //Delete participant
-            client.SetMute(conf.getId(), id, MediaType.VIDEO, flag);
+            client.SetMute(conf.getId(), partId, MediaType.VIDEO, flag);
         //Set it
             videoMuted = flag;
 	    //Launch event
@@ -304,7 +321,7 @@ public abstract class Participant  implements Serializable {
             //Get client
             XmlRpcMcuClient client = conf.getMCUClient();
             //Delete participant
-            client.SetMute(conf.getId(), id, MediaType.TEXT, flag);
+            client.SetMute(conf.getId(), partId, MediaType.TEXT, flag);
             //Set it
             textMuted = flag;
 	    //Launch event
@@ -342,7 +359,21 @@ public abstract class Participant  implements Serializable {
         this.sidebarId = sidebarId;
     }
 
+    public Boolean getIsOwner() {
+	return isOwner;
+    }
 
+    public void setIsOwner(Boolean isOwner) {
+	this.isOwner = isOwner;
+    }
+    public String getPin() {
+        return pin;
+    }
+    
+    public String[] getInfo() {
+	    return (String[])info.toArray();
+    }
+    
     /*** Must be overrriden by children */
     public boolean setVideoProfile(Profile profile)     { return false;}
     public boolean accept()                             { return false;}

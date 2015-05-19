@@ -19,7 +19,6 @@
 
 package org.murillo.mcuWeb;
 
-import java.util.ArrayList;
 import javax.servlet.sip.ServletParseException;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
@@ -34,6 +33,7 @@ import java.util.TimeZone;
 import java.util.UUID;
 import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.servlet.sip.Address;
@@ -58,15 +58,17 @@ import org.murillo.mcuWeb.Participant.State;
 @XmlAccessorType(XmlAccessType.NONE)
 public class Conference implements Participant.Listener,Serializable {
 
-    public void onMediaChanged(Participant part) {
-    }
+	public void onMediaChanged(Participant part) {
+	}
 
-    public void onMediaMuted(Participant part, String media, boolean muted) {
-    }
+	public void onMediaMuted(Participant part, String media, boolean muted) {
+	}
 
     public interface Listener {
         public void onConferenceInited(Conference conf);
         public void onConferenceEnded(Conference conf);
+        public void onConferenceRecordingStarted(Conference conf);
+        public void onConferenceRecordingStopped(Conference conf);
         public void onParticipantCreated(String confId, Participant part);
         public void onParticipantStateChanged(String confId, Integer partId, State state, Object data, Participant part);
 	public void onParticipantMediaChanged(String confId, Integer partId, Participant part);
@@ -83,7 +85,6 @@ public class Conference implements Participant.Listener,Serializable {
     protected String name;
     @XmlElement
     protected String did;
-    @XmlElement
     protected SipURI uri;
     protected XmlRpcMcuClient client;
     @XmlElement
@@ -123,6 +124,8 @@ public class Conference implements Participant.Listener,Serializable {
     private Integer size;
     private Integer slots[];
 
+    //Participant id counter
+    private final AtomicInteger count = new AtomicInteger(XmlRpcMcuClient.AppMixerId);
 
     private static final Logger logger =  Logger.getLogger(Conference.class.getName());
 
@@ -137,7 +140,7 @@ public class Conference implements Participant.Listener,Serializable {
         //Generate a uuid and apped it to the did to get an unique id not overlapping with the did
         UID = did+"-"+UUID.randomUUID().toString();
         //Create conference
-        this.id = client.CreateConference(UID,vad,profile.getAudioRate(),mixer.getEventQueueId());
+        this.id = client.CreateConference(UID,mixer.getEventQueueId());
         //Get timestamp
         this.timestamp = new Date();
         //Save values
@@ -183,6 +186,7 @@ public class Conference implements Participant.Listener,Serializable {
         addSupportedCodec("video", Codecs.MPEG4);
         addSupportedCodec("video", Codecs.RED);
         addSupportedCodec("video", Codecs.ULPFEC);
+	addSupportedCodec("video", Codecs.RTX);
         //Enable all text codecs
         addSupportedCodec("text", Codecs.T140RED);
         addSupportedCodec("text", Codecs.T140);
@@ -194,6 +198,9 @@ public class Conference implements Participant.Listener,Serializable {
         if (vad!=XmlRpcMcuClient.VADNONE && (compType==XmlRpcMcuClient.MOSAIC1p7 || compType==XmlRpcMcuClient.MOSAIC1p5))
             //Vad controlled
             setMosaicSlot(0,XmlRpcMcuClient.SLOTVAD);
+	//Set properties for conference init
+        properties.put("vad-mode"                               ,Integer.toString(vad));
+        properties.put("audio.mixer.rate"                       ,profile.getAudioRate().toString());
         //By default add to default mosaic
         addToDefaultMosaic = true;
         //By default do autoAccept
@@ -211,7 +218,9 @@ public class Conference implements Participant.Listener,Serializable {
         startRecordingBroadcaster(applyVariables("/var/recordings/${DID}-${TS}.flv"));
     }
 
-    public void init() {
+    public void init()  throws XmlRpcException  {
+        //Init conference
+        client.InitConference(id,properties);
         //We are inited
         fireOnConferenceInited();
     }
@@ -439,7 +448,7 @@ public class Conference implements Participant.Listener,Serializable {
             if (type==Participant.Type.SIP)
             {
                 //Create the participant
-                part = new RTPParticipant(partId,name,token,mosaicId,sidebarId,this);
+                part = new RTPParticipant(count.incrementAndGet(),partId,name,token,mosaicId,sidebarId,this);
                 //Set defaults
                 ((RTPParticipant)part).setIsSecure(defaultIsSecure);
                 ((RTPParticipant)part).setUseICE(defaultUseIce);
@@ -513,19 +522,17 @@ public class Conference implements Participant.Listener,Serializable {
     }
 
     public void joinParticipant(Participant part) throws XmlRpcException {
-        //Get ids for conference and participant
-        Integer partId = part.getId();
         //If auto add participant to default mosaic
         if (addToDefaultMosaic)
         {
             //Check if video is supported
             if (part.getVideoSupported() && part.isSending("video"))
                 //Add it to the default mosiac
-                client.AddMosaicParticipant(id, XmlRpcMcuClient.DefaultMosaic, partId);
+                client.AddMosaicParticipant(id, XmlRpcMcuClient.DefaultMosaic, part.getPartId());
             //Check if audio is supported
             if (part.getAudioSupported() && part.isSending("audio"))
                 //Add it to the default sidebar
-                client.AddSidebarParticipant(id, XmlRpcMcuClient.DefaultSidebar, partId);
+                client.AddSidebarParticipant(id, XmlRpcMcuClient.DefaultSidebar, part.getPartId());
         }
     }
 
@@ -534,11 +541,11 @@ public class Conference implements Participant.Listener,Serializable {
         Participant part = getParticipant(partId);
 
         //Set mosaic for participant
-        client.SetParticipantMosaic(id,part.getId(),mosaicId);
+        client.SetParticipantMosaic(id,part.getPartId(),mosaicId);
         //Store value
         part.setMosaicId(mosaicId);
         //Set sidebar for participant
-        client.SetParticipantSidebar(id,part.getId(),sidebarId);
+        client.SetParticipantSidebar(id,part.getPartId(),sidebarId);
         //Set it
         part.setSidebarId(sidebarId);
 
