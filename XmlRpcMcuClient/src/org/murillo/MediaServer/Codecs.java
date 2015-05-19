@@ -142,6 +142,7 @@ public class Codecs {
 
     public static final Integer ULPFEC       = 108;
     public static final Integer RED          = 109;
+    public static final Integer RTX          = 110;
 
     public static final Integer T140RED      = 105;
     public static final Integer T140         = 106;
@@ -175,6 +176,7 @@ public class Codecs {
             if (name.equalsIgnoreCase("VP8"))         return VP8;
             if (name.equalsIgnoreCase("RED"))         return RED;
             if (name.equalsIgnoreCase("ULPFEC"))      return ULPFEC;
+	    if (name.equalsIgnoreCase("RTX"))	      return RTX;
         }
         else if (media.equals("text"))
         {
@@ -210,6 +212,7 @@ public class Codecs {
             if (codec==VP8)        return "VP8";
             if (codec==RED)        return "red";
             if (codec==ULPFEC)     return "ulpfec";
+	    if (codec==RTX)        return "rtx";
         }
         else if (media.equals("text"))
         {

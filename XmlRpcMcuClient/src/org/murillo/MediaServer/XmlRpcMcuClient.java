@@ -390,7 +390,7 @@ public class XmlRpcMcuClient {
          //Create request
         Object[] request = new Object[]{confId,mosaicId,num,id};
          //Log
-        logger.log(level,"SetMosaicSlot({0},{1},{2})",request);
+        logger.log(level,"SetMosaicSlot({0},{1},{2},{3})",request);
         //Execute 
         HashMap response = (HashMap) client.execute("SetMosaicSlot", request);
         //Return 
@@ -964,6 +964,10 @@ public class XmlRpcMcuClient {
         logger.log(level,"GetParticipantStatistics({0},{1})",request);
         //Execute
         HashMap response = (HashMap) client.execute("GetParticipantStatistics", request);
+	//Check it is ok
+	if (((Integer)response.get("returnCode"))!=1)
+		//Error
+		return null;
         //Get result
         Object[] returnVal = (Object[]) response.get("returnVal");
         //Create map
