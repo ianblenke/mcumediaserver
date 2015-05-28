@@ -188,7 +188,7 @@ public class XmlRpcMcuClient {
     private XmlRpcTimedClient client;
     private XmlRpcClientConfigImpl config;
     private static final Logger logger = Logger.getLogger("XMLRPCMCU");
-    private static final Level level = Level.SEVERE;
+    private static final Level level = Level.INFO;
     
     /** Creates a new instance of XmlRpcMcuClient */
     public XmlRpcMcuClient(String  url) throws MalformedURLException
