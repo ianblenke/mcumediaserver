@@ -41,6 +41,8 @@ import org.murillo.MediaServer.Codecs.Setup;
  */
 public class XmlRpcMcuClient {
 
+	
+
     @XmlType()
     @XmlAccessorType(XmlAccessType.NONE)
     public static class MediaStatistics {
@@ -89,6 +91,8 @@ public class XmlRpcMcuClient {
     public static final Integer SD480P	= 19; // 480  x 360	AR:	1,333333333
     public static final Integer SQCIF	= 20; // 128  x 96	AR:	1,333333333
     public static final Integer SCIF	= 21; // 256  x 192	AR:	1,333333333
+    public static final Integer HD1080P = 22; // 1920 x 1080    AR:     1,777777778
+   
     
     public static final Integer MOSAIC1x1      = 0;
     public static final Integer MOSAIC2x2      = 1;
@@ -740,6 +744,29 @@ public class XmlRpcMcuClient {
         //Return
         return (((Integer)response.get("returnCode"))==1);
     }
+    
+	public boolean StartBrowsing(Integer confId, String url) throws XmlRpcException
+	{
+		//Create request
+		Object[] request = new Object[]{confId,url};
+		//Log
+		logger.log(level,"StartBrowsing({0},{1}})",request);
+		//Execute
+		HashMap response = (HashMap) client.execute("StartBrowsing", request);
+		//Return port
+		return (((Integer)response.get("returnCode"))==1);
+	}
+
+	public boolean StopBrowsing(Integer confId) throws XmlRpcException {
+		//Create request
+		Object[] request = new Object[]{confId};
+		//Log
+		logger.log(level,"StopBrowsing({0}})",request);
+		//Execute
+		HashMap response = (HashMap) client.execute("StopBrowsing", request);
+		//Return port
+		return (((Integer)response.get("returnCode"))==1);
+	}
     
     public boolean EndConference(Integer confId) throws XmlRpcException
     {
