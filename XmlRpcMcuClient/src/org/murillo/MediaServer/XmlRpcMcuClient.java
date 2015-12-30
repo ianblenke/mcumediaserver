@@ -119,6 +119,7 @@ public class XmlRpcMcuClient {
     public static final Integer MOSAIC1p3A     = 22;
 
     public static final Integer DefaultMosaic = 0;
+    public static final Integer AppMixerMosaic = -1;
     public static final Integer DefaultSidebar = 0;
     public static final Integer AppMixerId = 1;
 

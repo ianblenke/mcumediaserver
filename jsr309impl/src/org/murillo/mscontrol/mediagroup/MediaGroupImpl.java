@@ -11,7 +11,6 @@ import java.util.Iterator;
 import javax.media.mscontrol.MediaConfig;
 import javax.media.mscontrol.MediaObject;
 import javax.media.mscontrol.MsControlException;
-import javax.media.mscontrol.Parameters;
 import javax.media.mscontrol.join.JoinableStream.StreamType;
 import javax.media.mscontrol.mediagroup.MediaGroup;
 import javax.media.mscontrol.mediagroup.Player;
@@ -21,6 +20,7 @@ import javax.media.mscontrol.mediagroup.signals.SignalGenerator;
 import javax.media.mscontrol.resource.Action;
 import org.murillo.mscontrol.resource.ContainerImpl;
 import org.murillo.mscontrol.MediaSessionImpl;
+import org.murillo.mscontrol.ParametersImpl;
 
 /**
  *
@@ -33,7 +33,7 @@ public class MediaGroupImpl extends ContainerImpl implements MediaGroup {
     private final RecorderImpl recorder;
     
     
-    public MediaGroupImpl(MediaSessionImpl session,URI uri,Parameters params) throws MsControlException {
+    public MediaGroupImpl(MediaSessionImpl session,URI uri,ParametersImpl params) throws MsControlException {
         //Call parent
         super(session,uri,params);
         //Create player

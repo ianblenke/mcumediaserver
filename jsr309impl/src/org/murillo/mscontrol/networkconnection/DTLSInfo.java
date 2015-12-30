@@ -1,14 +1,28 @@
 package org.murillo.mscontrol.networkconnection;
 
-class DTLSInfo {
+import org.murillo.MediaServer.Codecs.Setup;
 
-    String setup;
-    String hash;
-    String fingerprint;
+class DTLSInfo
+{
+	Setup setup;
+	String hash;
+	String fingerprint;
 
-    public DTLSInfo(String setup, String hash, String fingerprint) {
-	this.setup = setup;
-	this.hash = hash;
-	this.fingerprint = fingerprint;
-    }
+	public DTLSInfo(Setup setup,String hash, String fingerprint) {
+   		this.setup = setup;
+		this.hash = hash;
+		this.fingerprint = fingerprint;
+	}
+
+	public String getFingerprint() {
+		return fingerprint;
+	}
+
+	public String getHash() {
+		return hash;
+	}
+
+	public Setup getSetup() {
+		return setup;
+	}
 }

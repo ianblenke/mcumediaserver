@@ -14,6 +14,7 @@ import javax.media.mscontrol.Parameter;
 import javax.media.mscontrol.Parameters;
 import javax.media.mscontrol.Qualifier;
 import javax.media.mscontrol.Value;
+import javax.media.mscontrol.join.JoinableStream;
 import javax.media.mscontrol.mixer.MediaMixer;
 import javax.media.mscontrol.mixer.MixerEvent;
 import javax.media.mscontrol.resource.Action;
@@ -27,6 +28,19 @@ import org.murillo.mscontrol.SupportedFeaturesImpl;
  * @author Sergio
  */
 class MixerAudioVideoConfig {
+	   
+    private final static Set<JoinableStream.StreamType> AUDIO			= new HashSet<JoinableStream.StreamType>();
+    private final static Set<JoinableStream.StreamType> AUDIO_VIDEO		= new HashSet<JoinableStream.StreamType>();
+    private final static Set<JoinableStream.StreamType> AUDIO_VIDEO_TEXT	= new HashSet<JoinableStream.StreamType>();
+    
+    static {
+	    AUDIO.add(JoinableStream.StreamType.audio);
+	    AUDIO_VIDEO.add(JoinableStream.StreamType.audio);
+	    AUDIO_VIDEO.add(JoinableStream.StreamType.video);
+	    AUDIO_VIDEO_TEXT.add(JoinableStream.StreamType.audio);
+	    AUDIO_VIDEO_TEXT.add(JoinableStream.StreamType.video);
+	    AUDIO_VIDEO_TEXT.add(JoinableStream.StreamType.message);
+    }    
     public static MediaConfig getConfig() {
         Parameters params = new ParametersImpl();
         //specify parameters
@@ -54,6 +68,6 @@ class MixerAudioVideoConfig {
         Set<Value> values = new HashSet();
 
         SupportedFeaturesImpl features = new SupportedFeaturesImpl(parameters, actions, eventTypes, qualifiers, triggers, values);
-        return new MediaConfigImpl(features, params);
+        return new MediaConfigImpl(features, params, AUDIO_VIDEO);
     }
 }

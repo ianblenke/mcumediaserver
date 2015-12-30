@@ -40,6 +40,8 @@ import org.w3c.dom.NodeList;
  * @author Sergio
  */
 public class DriverImpl implements Driver {
+    private static final Logger logger = Logger.getLogger(DriverImpl.class.getName());
+    
     public static String DEFAULT_NAME = "MCUMediaMixerDriver";
 
     private final String name;
@@ -137,9 +139,9 @@ public class DriverImpl implements Driver {
             serializer.serialize(doc);
 
         } catch (IOException ex) {
-            Logger.getLogger(DriverImpl.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
         } catch (ParserConfigurationException ex) {
-            Logger.getLogger(DriverImpl.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
         }
     }
 
@@ -179,14 +181,14 @@ public class DriverImpl implements Driver {
                                 //Set it
                                 mediaServerDefault = server;
                     } catch (MalformedURLException ex) {
-                         Logger.getLogger(DriverImpl.class.getName()).log(Level.SEVERE, null, ex);
+                         logger.log(Level.SEVERE, null, ex);
                     }
             } catch (Exception ex) {
-                Logger.getLogger(DriverImpl.class.getName()).log(Level.SEVERE, null, ex);
+                logger.log(Level.SEVERE, null, ex);
             }
 
         } catch (ParserConfigurationException ex) {
-                Logger.getLogger(DriverImpl.class.getName()).log(Level.SEVERE, null, ex);
+                logger.log(Level.SEVERE, null, ex);
         }
     }
     
@@ -217,7 +219,7 @@ public class DriverImpl implements Driver {
                 return new MSControlFactoryImpl(serverName,mediaServer,threadPool,this);
             } catch (MalformedURLException ex) {
                 //Log
-                Logger.getLogger(DriverImpl.class.getName()).log(Level.SEVERE, null, ex);
+                logger.log(Level.SEVERE, null, ex);
                 //Throw exception
                 throw new MsControlException("Wrong Media Mixer URL", ex);
             }

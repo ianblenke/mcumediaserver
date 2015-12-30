@@ -62,7 +62,7 @@ public class MixerAdapterJoinableStreamVideo extends JoinableStreamImpl implemen
         MediaServer mediaServer = sess.getMediaServer();
         try {
             //Set it
-            mediaServer.VideoMixerPortSetCodec(sess.getSessionId(),mixerId,portId,videoCodec,MediaServer.CIF,20,312,300);
+            mediaServer.VideoMixerPortSetCodec(sess.getSessionId(),mixerId,portId,videoCodec,MediaServer.CIF,20,312,300,null);
         } catch (XmlRpcException ex) {
             Logger.getLogger(NetworkConnectionImpl.class.getName()).log(Level.SEVERE, null, ex);
             //Trhow it

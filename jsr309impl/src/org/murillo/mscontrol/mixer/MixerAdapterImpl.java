@@ -19,6 +19,7 @@ import javax.media.mscontrol.mixer.MixerAdapter;
 import javax.media.mscontrol.resource.Action;
 import org.murillo.mscontrol.resource.ContainerImpl;
 import org.murillo.mscontrol.MediaSessionImpl;
+import org.murillo.mscontrol.ParametersImpl;
 
 /**
  *
@@ -26,7 +27,7 @@ import org.murillo.mscontrol.MediaSessionImpl;
  */
 public class MixerAdapterImpl extends ContainerImpl implements MixerAdapter {
 
-    public MixerAdapterImpl(MediaSessionImpl sess, MediaMixerImpl mixer, URI uri,Parameters params) throws MsControlException {
+    public MixerAdapterImpl(MediaSessionImpl sess, MediaMixerImpl mixer, URI uri,ParametersImpl params) throws MsControlException {
         //Call parent
         super(sess,uri,params);
         //Get supported streasm

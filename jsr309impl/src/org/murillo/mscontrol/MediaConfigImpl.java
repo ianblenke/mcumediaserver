@@ -28,15 +28,17 @@ public class MediaConfigImpl implements MediaConfig {
 
     private SupportedFeaturesImpl features;
     private Parameters params = new ParametersImpl();
+    private final Set<StreamType> streams;
 
-    public MediaConfigImpl(SupportedFeaturesImpl features, Parameters params) {
+    public MediaConfigImpl(SupportedFeaturesImpl features, Parameters params,Set<StreamType> streams) {
         this.features = features;
         this.params.putAll(params);
+	this.streams = streams;
     }
 
     @Override
     public boolean hasStream(StreamType streamType) {
-        return streamType.equals(StreamType.audio);
+        return streams.contains(streamType);
     }
 
     @Override
@@ -74,7 +76,7 @@ public class MediaConfigImpl implements MediaConfig {
         if (params != null) {
             cust.putAll(params);
         }
-        return new MediaConfigImpl(f, cust);
+        return new MediaConfigImpl(f, cust, streams);
     }
 
     @Override

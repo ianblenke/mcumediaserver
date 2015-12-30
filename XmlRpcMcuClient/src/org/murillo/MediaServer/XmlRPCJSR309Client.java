@@ -354,10 +354,10 @@ public class XmlRPCJSR309Client {
         return (String) returnVal[0];
     }
 
-    public boolean EndpointSetRemoteCryptoDTLS(Integer sessId,Integer endpointId,MediaType media,String setup,String hash,String fingerprint) throws XmlRpcException
+    public boolean EndpointSetRemoteCryptoDTLS(Integer sessId,Integer endpointId,MediaType media,Codecs.Setup setup,String hash,String fingerprint) throws XmlRpcException
     {
         //Create request
-        Object[] request = new Object[]{sessId,endpointId,media.valueOf(),setup,hash,fingerprint};
+        Object[] request = new Object[]{sessId,endpointId,media.valueOf(),setup.valueOf(),hash,fingerprint};
         //Execute
         HashMap response = (HashMap) client.execute("EndpointSetRemoteCryptoDTLS", request);
         //Return

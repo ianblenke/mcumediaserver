@@ -26,7 +26,7 @@ public abstract class ContainerImpl extends JoinableContainerImpl implements Res
     private Parameters params;
     private final ConcurrentLinkedQueue<AllocationEventListener> listenersAllocation;
 
-    public ContainerImpl (MediaSessionImpl sess,URI uri,Parameters params) {
+    public ContainerImpl (MediaSessionImpl sess,URI uri,ParametersImpl params) {
         //Call parent
         super(sess);
         //Store

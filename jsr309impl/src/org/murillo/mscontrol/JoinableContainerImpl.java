@@ -38,6 +38,10 @@ public abstract class JoinableContainerImpl extends JoinableImpl implements Join
          //Add stream to the stream map
         streams.put(type,stream);
     }
+     
+     public boolean HasStream(StreamType type) {
+	     return streams.containsKey(type);
+     }
 
     @Override
     public JoinableStream getJoinableStream(StreamType type) throws MsControlException {

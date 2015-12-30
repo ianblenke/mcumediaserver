@@ -49,6 +49,10 @@ public class MSControlFactoryImpl implements MsControlFactory, MediaServerEventQ
     private final ExecutorService threadPool;
 
     public MSControlFactoryImpl(String uuid,MediaServer mediaServer, ExecutorService threadPool, DriverImpl driver) throws MsControlException {
+	//Ensure we have media server
+	 if (mediaServer==null)
+		 ///Errot
+		 throw new MsControlException("Error creating control factory, no media server configured");
 	//Store uuid
 	this.uuid = uuid;
         //store it
@@ -102,7 +106,7 @@ public class MSControlFactoryImpl implements MsControlFactory, MediaServerEventQ
         //Adn return
         return session;
     }
-
+    
     @Override
     public MediaConfig getMediaConfig(Configuration<?> cfg) throws MediaConfigException {
         if (cfg.equals(NetworkConnection.BASIC)) {

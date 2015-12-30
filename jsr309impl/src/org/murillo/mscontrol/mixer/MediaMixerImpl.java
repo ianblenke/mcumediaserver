@@ -32,6 +32,7 @@ import org.murillo.mscontrol.JoinableImpl;
 import org.murillo.mscontrol.resource.ContainerImpl;
 import org.murillo.mscontrol.MediaServer;
 import org.murillo.mscontrol.MediaSessionImpl;
+import org.murillo.mscontrol.ParametersImpl;
 import org.murillo.mscontrol.mediagroup.PlayerImpl;
 import org.murillo.mscontrol.resource.video.VideoRendererImpl;
 
@@ -52,7 +53,7 @@ public class MediaMixerImpl extends ContainerImpl implements MediaMixer{
     private EnumMap<StreamType,Integer> mixers;
     private final VideoRendererImpl videoRenderer;
 
-    public MediaMixerImpl(MediaSessionImpl sess,URI uri,Parameters params) throws MsControlException {
+    public MediaMixerImpl(MediaSessionImpl sess,URI uri,ParametersImpl params) throws MsControlException {
         //Call parent
         super(sess,uri,params);
         //Store values
@@ -119,15 +120,17 @@ public class MediaMixerImpl extends ContainerImpl implements MediaMixer{
     }
 
     @Override
-    public MixerAdapter createMixerAdapter(Configuration<MixerAdapter> config, Parameters params) throws MsControlException {
+    public MixerAdapter createMixerAdapter(Configuration<MixerAdapter> config, Parameters input) throws MsControlException {
         //Check configuration
         if (config==null)
             //Should not be null
             throw new MsControlException("MediaGroup configuration cannot be null");
+	//Sanetize params
+	ParametersImpl params = ParametersImpl.sanetize(input);
         //Get uid
         String uid = "MG." + UUID.randomUUID().toString().replace("-", "");
         //Check id
-        if (params!=null && params.containsKey(MEDIAOBJECT_ID))
+        if (params.containsKey(MEDIAOBJECT_ID))
             //Set it
             uid = (String) params.get(MEDIAOBJECT_ID);
         //Create chidl uri
@@ -141,11 +144,13 @@ public class MediaMixerImpl extends ContainerImpl implements MediaMixer{
     }
 
     @Override
-    public MixerAdapter createMixerAdapter(MediaConfig config, Parameters params) throws MsControlException {
+    public MixerAdapter createMixerAdapter(MediaConfig config, Parameters input) throws MsControlException {
         //Get uid
         String uid = "MG." + UUID.randomUUID().toString().replace("-", "");
+	//Sanetize params
+	ParametersImpl params = ParametersImpl.sanetize(input);
         //Check id
-        if (params!=null && params.containsKey(MEDIAOBJECT_ID))
+        if (params.containsKey(MEDIAOBJECT_ID))
             //Set it
             uid = (String) params.get(MEDIAOBJECT_ID);
         //Create chidl uri

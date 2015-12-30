@@ -88,22 +88,35 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
     }
 
     @Override
-    public NetworkConnection createNetworkConnection(Configuration<NetworkConnection> pattern, Parameters params) throws MsControlException {
+    public NetworkConnection createNetworkConnection(Configuration<NetworkConnection> pattern, Parameters input) throws MsControlException {
+	MediaConfig mc;
+	
         //Check pattern
         if (pattern==null)
             //Should not be null
             throw new MsControlException("NetworkConnection Configuration cannot be null");
+	//Get media config
+	if (pattern == NetworkConnection.BASIC )
+		//Set it
+		mc = NetworkConnectionImpl.BASE_CONFIG;
+	else if (pattern == NetworkConnectionImpl.AUDIO)
+		//Set it
+		mc = NetworkConnectionImpl.AUDIO_CONFIG;
+	else
+		throw new MsControlException("Unsupported NetworkConnection Configuration");
+	//Sanetize params
+	ParametersImpl params = ParametersImpl.sanetize(input);
         //Get uid
         String uid = "NetworkConnections/" + UUID.randomUUID().toString().replace("-", "");
         //Check id
-        if (params!=null && params.containsKey(MEDIAOBJECT_ID))
+        if (params.containsKey(MEDIAOBJECT_ID))
             //Set it
             uid = (String) params.get(MEDIAOBJECT_ID);
-        //Check the parameters
         //Create chidl uri
         URI child = createChildURI(uid,uri);
+
         //Create media group
-        NetworkConnectionImpl nc = new NetworkConnectionImpl(this,child, params);
+        NetworkConnectionImpl nc = new NetworkConnectionImpl(this,child,mc,params);
         //Add it
         networkconnections.put(child, nc);
         //Return  object
@@ -111,21 +124,23 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
     }
 
     @Override
-    public NetworkConnection createNetworkConnection(MediaConfig mc, Parameters params) throws MsControlException {
+    public NetworkConnection createNetworkConnection(MediaConfig mc, Parameters input) throws MsControlException {
         //Check pattern
         if (mc==null)
             //Should not be null
             throw new MsControlException("NetworkConnection MediaConfig cannot be null");
+	//Sanetize params
+	ParametersImpl params = ParametersImpl.sanetize(input);
         //Get uid
         String uid = "NetworConnections/" + UUID.randomUUID().toString().replace("-", "");
                 //Check id
-        if (params!=null && params.containsKey(MEDIAOBJECT_ID))
+        if (params.containsKey(MEDIAOBJECT_ID))
             //Set it
             uid = (String) params.get(MEDIAOBJECT_ID);
         //Create chidl uri
         URI child = createChildURI(uid,uri);
         //Create media group
-        NetworkConnectionImpl nc = new NetworkConnectionImpl(this,child,params);
+        NetworkConnectionImpl nc = new NetworkConnectionImpl(this,child,mc,params);
         //Add it
         networkconnections.put(child, nc);
         //Return  object
@@ -139,15 +154,17 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
     }
 
     @Override
-    public MediaGroup createMediaGroup(Configuration<MediaGroup> config, Parameters params) throws MsControlException {
+    public MediaGroup createMediaGroup(Configuration<MediaGroup> config, Parameters input) throws MsControlException {
         //Check configuration
         if (config==null)
             //Should not be null
             throw new MsControlException("MediaGroup configuration cannot be null");
+	//Sanetize params
+	ParametersImpl params = ParametersImpl.sanetize(input);
         //Get uid
         String uid = "MediaGroups/" + UUID.randomUUID().toString().replace("-", "");
         //Check id
-        if (params!=null && params.containsKey(MEDIAOBJECT_ID))
+        if (params.containsKey(MEDIAOBJECT_ID))
             //Set it
             uid = (String) params.get(MEDIAOBJECT_ID);
         //Create chidl uri
@@ -161,11 +178,13 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
     }
 
     @Override
-    public MediaGroup createMediaGroup(MediaConfig config, Parameters params) throws MsControlException {
+    public MediaGroup createMediaGroup(MediaConfig config, Parameters input) throws MsControlException {
         //Get uid
         String uid = "MediaGroups/" + UUID.randomUUID().toString().replace("-", "");
+	//Sanetize params
+	ParametersImpl params = ParametersImpl.sanetize(input);
         //Check id
-        if (params!=null && params.containsKey(MEDIAOBJECT_ID))
+        if (params.containsKey(MEDIAOBJECT_ID))
             //Set it
             uid = (String) params.get(MEDIAOBJECT_ID);
         //Create chidl uri
@@ -197,11 +216,13 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
     }
 
     @Override
-    public MediaMixer createMediaMixer(Configuration<MediaMixer> config, Parameters params) throws MsControlException {
+    public MediaMixer createMediaMixer(Configuration<MediaMixer> config, Parameters input) throws MsControlException {
         //Check configuration
         if (config==null)
             //Should not be null
             throw new MsControlException("MediaMixer Configuration cannot be null");
+	//Sanetize params
+	ParametersImpl params = ParametersImpl.sanetize(input);
         //Get uid
         String uid = "MediaMixers/" + UUID.randomUUID().toString().replace("-", "");
         //Check id
@@ -219,11 +240,13 @@ public class MediaSessionImpl extends MediaObjectImpl implements MediaSession {
     }
 
     @Override
-    public MediaMixer createMediaMixer(MediaConfig config, Parameters params) throws MsControlException {
+    public MediaMixer createMediaMixer(MediaConfig config, Parameters input) throws MsControlException {
         //Get uid
         String uid = "MediaMixers/" + UUID.randomUUID().toString().replace("-", "");
+	//Sanetize params
+	ParametersImpl params = ParametersImpl.sanetize(input);
         //Check id
-        if (params!=null && params.containsKey(MEDIAOBJECT_ID))
+        if (params.containsKey(MEDIAOBJECT_ID))
             //Set it
             uid = (String) params.get(MEDIAOBJECT_ID);
         //Create chidl uri
