@@ -39,7 +39,7 @@ public class Codecs {
     public static enum Direction {
 	INACTIVE("inactive"),
         SENDRECV("sendrecv"),
-        SENDONLY("sendolny"),
+        SENDONLY("sendonly"),
         RECVONLY("recvonly");
 
         public final String value;
