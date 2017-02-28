@@ -634,7 +634,7 @@ public class RTPParticipant extends Participant {
 		SessionDescription sdp = new SessionDescription();
 
 		//Set origin
-		sdp.setOrigin("-", getId().toString(), Long.toString(new Date().getTime()), "IN", "IP4", getRecIp());
+		sdp.setOrigin("-", getId(), new Date().getTime(), "IN", "IP4", getRecIp());
 		//Set name
 		sdp.setSessionName("MediaMixerSession");
 		//Set connection info
